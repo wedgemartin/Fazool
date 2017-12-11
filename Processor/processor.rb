@@ -48,7 +48,7 @@ begin
     puts " Got body from bus: #{body}"
     # Body will either be a request for data recall
     #   or stuff that needs to be filtered/recorded in the DB
-    if body =~ /"Fazool,/ or body =~ / to you\./
+    if body =~ /"Faz(.*?),/ or body =~ / to you\./
       # We have a command.
       is_page = body =~ / to you\./ ? true : false
       actor = body.split(' ').shift
