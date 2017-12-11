@@ -10,8 +10,9 @@ if [ "x${CHECK}" = "x" ];then
 fi
 
 kill ${CHECK}
+sleep 1
 
-CHECK_TWO=`ps auxwwww | grep ${CHECK} | grep rb | grep connector`
+CHECK_TWO=`ps auxwwww | grep "${CHECK}" | grep rb | grep connector`
 if [ "x${CHECK_TWO}" != "x" ];then
   echo "Process ${CHECK} failed to terminate."
   exit 1
