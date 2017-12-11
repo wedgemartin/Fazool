@@ -16,14 +16,15 @@ queue = channel.queue('del_received')
 
 
 def recall_logic(channel, command, page_bool, actor)
+  puts "  Command is: #{command}"
   query = { quote: nil }
   if command =~ /regex/
-    regex = /regex (.*?)"/.match(command)[1]
+    regex = /regex (.*?)$/.match(command)[1]
   elsif command =~ /recall when/
     # Need to get by user.
-    author, regex = /recall when (.*?) said (.*?)"/.match(command)[1,2]
+    author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
   else
-    regex = /recall (.*?)"/.match(command)[1]
+    regex = /recall (.*?)$/.match(command)[1]
   end
 
   query[:quote] = /#{regex}/
@@ -51,13 +52,19 @@ begin
     if body =~ /"Faz(...)?,/ or body =~ / to you\./
       # We have a command.
       is_page = body =~ / to you\./ ? true : false
+      request = nil
+      if is_page
+        request = /"(.*?)"/.match(body)[1]
+      else
+        request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
+      end
       actor = body.split(' ').shift
       prefix = is_page ? "page #{actor} = : >>" : ":>>"
-      if body =~ /what.*time/
-        channel.default_exchange.publish("say It is currently #{Time.now}, #{actor}", :routing_key => @routing_key)
-      elsif body =~ /recall/
-        puts "Recall request: #{body}"
-        recall_logic(channel, body, is_page, actor)     
+      if request =~ /what.*time/
+        channel.default_exchange.publish("#{prefix} It is currently #{Time.now}, #{actor}", :routing_key => @routing_key)
+      elsif request =~ /^recall/
+        puts "Recall request: #{request}"
+        recall_logic(channel, request, is_page, actor)     
       else
         channel.default_exchange.publish("#{prefix} Sorry, #{actor} but I am not prepared to accept requests yet.", :routing_key => @routing_key)
       end
