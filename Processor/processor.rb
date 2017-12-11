@@ -16,22 +16,30 @@ queue = channel.queue('del_received')
 
 
 def recall_logic(channel, command, page_bool, actor)
+  query = { quote: nil }
   if command =~ /regex/
-    # regex = command.split(' ').pop
-    # regex = regex.split('"').shift
     regex = /regex (.*?)"/.match(command)[1]
-    random = @collection.find({quote: /#{regex}/}).count
-    puts "  >>>> Random is #{random}"
-    quote = @collection.find({quote: /#{regex}/}).limit(-1).skip(rand(random)).first
-    puts " ==========>  QUOTE #{quote}"
-    prefix = page_bool ? "page #{actor} = " : "say"
-    if quote
-      channel.default_exchange.publish("#{prefix} #{quote['created_at']}: #{quote['quote']}", :routing_key => @routing_key)
-    else
-      # Found nothing.
-      channel.default_exchange.publish("#{prefix} Sorry, I find no matching entries.", :routing_key => @routing_key)
-    end
+  elsif command =~ /recall when/
+    # Need to get by user.
+    author, regex = /recall when (.*?) said (.*?)"/.match(command)[1,2]
+  else
+    regex = /recall (.*?)"/.match(command)[1]
   end
+
+  query[:quote] = /#{regex}/
+  query[:author] = author if author
+  random = @collection.find(query).count
+  quote = @collection.find(query).limit(-1).skip(rand(random)).first
+
+  prefix = page_bool ? "page #{actor} = : >>" : ":>>"
+
+  if quote
+    channel.default_exchange.publish("#{prefix} #{quote['created_at']}: #{quote['quote']}", :routing_key => @routing_key)
+  else
+    # Found nothing.
+    channel.default_exchange.publish("#{prefix} Sorry, I find no matching entries.", :routing_key => @routing_key)
+  end
+
 end
 
 begin
@@ -43,12 +51,12 @@ begin
     if body =~ /"Fazool,/ or body =~ / to you\./
       # We have a command.
       is_page = body =~ / to you\./ ? true : false
-      puts "  Is page? #{is_page}"
       actor = body.split(' ').shift
-      prefix = is_page ? "page #{actor} = " : "say"
+      prefix = is_page ? "page #{actor} = : >>" : ":>>"
       if body =~ /what.*time/
         channel.default_exchange.publish("say It is currently #{Time.now}, #{actor}", :routing_key => @routing_key)
       elsif body =~ /recall/
+        puts "Recall request: #{body}"
         recall_logic(channel, body, is_page, actor)     
       else
         channel.default_exchange.publish("#{prefix} Sorry, #{actor} but I am not prepared to accept requests yet.", :routing_key => @routing_key)

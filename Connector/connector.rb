@@ -7,7 +7,12 @@ require 'bunny'
 
 @client.connect Socket.pack_sockaddr_in(4999, 'del.shutdown.com')
 
-@client.puts "connect Fazool fazpass"
+unless ENV['FAZ_PASS']
+  puts "ERROR: Must have a variable set for FAZ_PASS in the local env"
+  exit 1
+end
+
+@client.puts "connect Fazool #{ENV['FAZ_PASS']}"
 
 ### Start thread to read messages off the bus and act accordingly.
 Thread.new do
