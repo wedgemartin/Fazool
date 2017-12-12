@@ -104,7 +104,7 @@ end
 
 
 def fortune_command(prefix)
-  fortune = `fortune`
+  fortune = `fortune -o`
   fortune.gsub!(/[\r\n]+/m, ' ')
   fortune.gsub!('  ', ' ')
   fortune.gsub!(/\t+/, ' ')
