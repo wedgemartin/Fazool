@@ -54,7 +54,8 @@ def who_command(prefix)
   push_message("#{prefix} #{phrase_array.sample} #{culprit}")
 end
 
-def what_command(prefix, command)
+
+def what_command(prefix, command, actor)
   if command =~ /time is/
     push_message("#{prefix} It is currently #{Time.now}, #{actor}")
   elsif command =~ /the fuck/i
@@ -65,6 +66,17 @@ def what_command(prefix, command)
     thing = random_quote['quote'].split(' ').sample.gsub('"', '')
     phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
     push_message("#{prefix} #{phrase_array.sample} '#{thing}'")
+  end
+end
+
+
+def how_command(prefix, actor)
+  count = @collection.find(:quote => /"[bB]ecause/).count
+  random = @collection.find(:quote => /"[bB]ecause/).limit(-1).skip(rand(count)).first
+  if random
+    push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
+  else 
+    push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
   end
 end
 
@@ -92,7 +104,11 @@ def command_logic(command, page_bool, actor)
     # Who based command. Make shit up.
     who_command(prefix)
   when /^[wW]hat/
-    what_command(prefix, command)
+    what_command(prefix, command, actor)
+  when /^[hH]ow/
+    how_command(prefix, actor)
+  when /^[wW]hy/
+    how_command(prefix, actor)
   when /^stats/
     stats_command(prefix)
   else
