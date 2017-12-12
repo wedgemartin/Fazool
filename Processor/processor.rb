@@ -55,6 +55,21 @@ def who_command(prefix)
 end
 
 
+def will_command(prefix)
+  phrase_array = [ 'Sources say, "No"', 'Yes, definitely.', 'Probably not.', 'If a frog had wings, would it bump its ass a hoppin?',
+                   "I wouldn't bet on it.", 'Most assuredly.', 'Maybe after tea.', 'How should I know?', 'Ask Baga. I think he bought it.' ]
+  push_message("#{prefix} #{phrase_array.sample}")
+end
+
+
+def how_command(prefix)
+  phrase_array = [ 'By osmosis.', 'By removing his head from his.. hey, whoah, I just saw a trail.', 'North by northweset.',
+                   "By visiting your grandma's place.", "Elementary, Watson.", 'How should I know?', 'I have no idea.', 
+                   'Just follow the instructions.', 'Let me google that for you.' ]
+  push_message("#{prefix} #{phrase_array.sample}")
+end
+
+
 def what_command(prefix, command, actor)
   if command =~ /time is/
     push_message("#{prefix} It is currently #{Time.now}, #{actor}")
@@ -65,12 +80,12 @@ def what_command(prefix, command, actor)
     random_quote = @collection.find().limit(-1).skip(rand(count)).first
     thing = random_quote['quote'].split(' ').sample.gsub('"', '')
     phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
-    push_message("#{prefix} #{phrase_array.sample} '#{thing}'")
+    push_message("#{prefix} #{phrase_array.sample} '#{thing}', #{actor}")
   end
 end
 
 
-def how_command(prefix, actor)
+def why_command(prefix, actor)
   count = @collection.find(:quote => /"[bB]ecause/).count
   random = @collection.find(:quote => /"[bB]ecause/).limit(-1).skip(rand(count)).first
   if random
@@ -112,9 +127,11 @@ def command_logic(command, page_bool, actor)
   when /^[wW]hat/
     what_command(prefix, command, actor)
   when /^[hH]ow/
-    how_command(prefix, actor)
+    how_command(prefix)
   when /^[wW]hy/
-    how_command(prefix, actor)
+    why_command(prefix, actor)
+  when /^[wW]ill/
+    will_command(prefix)
   when /^stats/
     stats_command(prefix)
   else
