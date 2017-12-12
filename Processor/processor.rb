@@ -103,11 +103,22 @@ def stats_command(prefix)
 end
 
 
+def fortune_command(prefix)
+  fortune = `fortune`
+  fortune.gsub!(/[\r\n]+/m, ' ')
+  fortune.gsub!('  ', ' ')
+  fortune.gsub!(/\t+/, ' ')
+  push_message("#{prefix} #{fortune}")
+end
+
+
 def command_logic(command, page_bool, actor)
   prefix = page_bool ? "page #{actor} = : >>" : ":>>"
   base_command = ''
   if command =~ /^stats/
     base_command = 'stats'
+  elsif command =~ /^fortune/
+    base_command = 'fortune'
   else
     # base_command = /^(.*?)[ "]/.match(command)[1]
     base_command = /^(.*?) /.match(command)
@@ -132,8 +143,10 @@ def command_logic(command, page_bool, actor)
     why_command(prefix, actor)
   when /^[wW]ill/
     will_command(prefix)
-  when /^stats/
+  when 'stats'
     stats_command(prefix)
+  when 'fortune'
+    fortune_command(prefix)
   else
     push_message("#{prefix} Sorry, #{actor} but I do not understand that command.")
   end
