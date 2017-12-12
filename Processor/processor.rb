@@ -94,7 +94,13 @@ def command_logic(command, page_bool, actor)
   if command =~ /^stats/
     base_command = 'stats'
   else
-    base_command = /^(.*?) /.match(command)[1]
+    # base_command = /^(.*?)[ "]/.match(command)[1]
+    base_command = /^(.*?) /.match(command)
+    if base_command
+      base_command = base_command[1]
+    else
+      base_command = command
+    end
   end
 
   case base_command
@@ -112,7 +118,7 @@ def command_logic(command, page_bool, actor)
   when /^stats/
     stats_command(prefix)
   else
-    push_message("#{prefix} Sorry, #{actor} but I am not prepared to accept requests yet.")
+    push_message("#{prefix} Sorry, #{actor} but I do not understand that command.")
   end
 end
 
