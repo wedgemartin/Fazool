@@ -6,8 +6,8 @@ require 'mongo'
 ### Start thread to read messages off the bus and act accordingly.
 bunny = Bunny.new
 bunny.start
-channel = bunny.create_channel
-queue = channel.queue('del_received')
+@channel = bunny.create_channel
+queue = @channel.queue('del_received')
 
 @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
 @collection = @mongo[:quotes]
@@ -15,9 +15,15 @@ queue = channel.queue('del_received')
 @routing_key = "send_to_del"
 
 
-def recall_logic(channel, command, page_bool, actor)
+def push_message(text)
+  @channel.default_exchange.publish(text, :routing_key => @routing_key)
+end
+
+
+def recall_logic(prefix, command, actor)
   puts "  Command is: #{command}"
   query = { quote: nil }
+  base_command = /^(.*?) /.match(command)[1]
   if command =~ /regex/
     regex = /regex (.*?)$/.match(command)[1]
   elsif command =~ /recall when/
@@ -29,19 +35,71 @@ def recall_logic(channel, command, page_bool, actor)
 
   query[:quote] = /#{regex}/
   query[:author] = author if author
-  random = @collection.find(query).count
-  quote = @collection.find(query).limit(-1).skip(rand(random)).first
-
-  prefix = page_bool ? "page #{actor} = : >>" : ":>>"
+  query_count = @collection.find(query).count
+  quote = @collection.find(query).limit(-1).skip(rand(query_count)).first
 
   if quote
-    channel.default_exchange.publish("#{prefix} #{quote['created_at']}: #{quote['quote']}", :routing_key => @routing_key)
+    push_message("#{prefix} #{quote['created_at']}: #{quote['quote']}")
   else
     # Found nothing.
-    channel.default_exchange.publish("#{prefix} Sorry, I find no matching entries.", :routing_key => @routing_key)
+    push_message("#{prefix} Sorry, I find no matching entries.")
+  end
+end
+
+
+def who_command(prefix)
+  distinct_count = @collection.distinct('author').count
+  culprit = @collection.distinct('author').sample
+  phrase_array = [ 'It was probably', "I'm guessing", "Wouldn't bet on it, but I've got 5 dollars on", '', 'Your mother told me it was' ]
+  push_message("#{prefix} #{phrase_array.sample} #{culprit}")
+end
+
+def what_command(prefix, command)
+  if command =~ /time is/
+    push_message("#{prefix} It is currently #{Time.now}, #{actor}")
+  elsif command =~ /the fuck/i
+    push_message("#{prefix} I bet you expect me to say 'Indeed.' but I'm not your stupid Slack bot.")
+  else
+    count = @collection.count()
+    random_quote = @collection.find().limit(-1).skip(rand(count)).first
+    thing = random_quote['quote'].split(' ').sample.gsub('"', '')
+    phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
+    push_message("#{prefix} #{phrase_array.sample} '#{thing}'")
+  end
+end
+
+
+def stats_command(prefix)
+  count = @collection.count()
+  author_count = @collection.distinct('author').count
+  push_message("#{prefix} There are currently #{count} entries in my database from #{author_count} different authors.")
+end
+
+
+def command_logic(command, page_bool, actor)
+  prefix = page_bool ? "page #{actor} = : >>" : ":>>"
+  base_command = ''
+  if command =~ /^stats/
+    base_command = 'stats'
+  else
+    base_command = /^(.*?) /.match(command)[1]
   end
 
+  case base_command
+  when 'recall'
+    recall_logic(prefix, command, actor)
+  when /^[wW]ho/
+    # Who based command. Make shit up.
+    who_command(prefix)
+  when /^[wW]hat/
+    what_command(prefix, command)
+  when /^stats/
+    stats_command(prefix)
+  else
+    push_message("#{prefix} Sorry, #{actor} but I am not prepared to accept requests yet.")
+  end
 end
+
 
 begin
   puts "Subscribing to queue 'del-received'..."
@@ -59,14 +117,8 @@ begin
         request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
       end
       actor = body.split(' ').shift
-      prefix = is_page ? "page #{actor} = : >>" : ":>>"
-      if request =~ /what.*time/
-        channel.default_exchange.publish("#{prefix} It is currently #{Time.now}, #{actor}", :routing_key => @routing_key)
-      elsif request =~ /^recall/
-        puts "Recall request: #{request}"
-        recall_logic(channel, request, is_page, actor)     
-      else
-        channel.default_exchange.publish("#{prefix} Sorry, #{actor} but I am not prepared to accept requests yet.", :routing_key => @routing_key)
+      if request
+        command_logic(request, is_page, actor)
       end
     else
       # Record this to the database.
