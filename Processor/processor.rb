@@ -23,23 +23,38 @@ end
 def recall_logic(prefix, command, actor)
   puts "  Command is: #{command}"
   query = { quote: nil }
+  id_str = ""
+  id_match = /(with id)$/.match(command)
+  if id_match
+    id_str = id_match[1]
+    command.gsub!(/with id$/, '')
+  end
   base_command = /^(.*?) /.match(command)[1]
   if command =~ /regex/
     regex = /regex (.*?)$/.match(command)[1]
   elsif command =~ /recall when/
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
+  elsif command =~ /recall id /
+    _id = /recall id (.*?)$/.match(command)[1]
+    puts "  ID: #{_id}"
+    query = { _id: BSON::ObjectId(_id) }
   else
     regex = /recall (.*?)$/.match(command)[1]
   end
 
-  query[:quote] = /#{regex}/
-  query[:author] = author if author
+  unless _id
+    query[:quote] = /#{regex}/
+    query[:author] = author if author
+  end
   query_count = @collection.find(query).count
   quote = @collection.find(query).limit(-1).skip(rand(query_count)).first
 
   if quote
-    push_message("#{prefix} #{quote['created_at']}: #{quote['quote']}")
+    if id_str.length > 1
+      id_str = quote['_id']
+    end
+    push_message("#{prefix} #{quote['created_at']}: #{id_str} #{quote['quote']}")
   else
     # Found nothing.
     push_message("#{prefix} Sorry, I find no matching entries.")
@@ -111,6 +126,11 @@ def fortune_command(prefix)
   push_message("#{prefix} #{fortune}")
 end
 
+def store_command(prefix, string, actor)
+  @collection.insert_one({author: actor, quote: "#{actor} stored: #{string}", :created_at => Time.now})
+  push_message("#{prefix} Stored.")
+end
+
 
 def command_logic(command, page_bool, actor)
   prefix = page_bool ? "page #{actor} = : >>" : ":>>"
@@ -147,6 +167,8 @@ def command_logic(command, page_bool, actor)
     stats_command(prefix)
   when 'fortune'
     fortune_command(prefix)
+  when 'store'
+    store_command(prefix, command, actor)
   else
     push_message("#{prefix} Sorry, #{actor} but I do not understand that command.")
   end
