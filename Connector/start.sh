@@ -7,6 +7,17 @@ if [ "x${FAZ_PASS}" = "x" ];then
   exit 1
 fi
 
+if ["x${FAZ_MUD_HOST}" = "x" ];then
+  echo "Must supply a value for FAZ_MUD_HOST in your environment!"
+  exit 1
+fi
+
+if ["x${FAZ_MUD_PORT}" = "x" ];then
+  echo "Must supply a value for FAZ_MUD_PORT in your environment!"
+  exit 1
+fi
+
+
 CHECK=`ps auxwwww | grep connector.rb | grep -v grep | grep -v ack | awk '{print $2}'`
 
 if [ "x${CHECK}" != "x" ];then
