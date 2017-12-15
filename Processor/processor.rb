@@ -85,22 +85,53 @@ end
 def who_command(prefix)
   distinct_count = @collection.distinct('author').count
   culprit = @collection.distinct('author').sample
-  phrase_array = [ 'It was probably', "I'm guessing", "Wouldn't bet on it, but I've got 5 dollars on", '', 'Your mother told me it was' ]
+  phrase_array = [ 
+    'It was probably', 
+    "I'm guessing", 
+    "Wouldn't bet on it, but I've got 5 dollars on", 
+    ' ', 
+    'Your mother told me it was',  
+    "Don't you think it might've been",
+    "Smells like",
+    "Could be"
+  ]
   push_message("#{prefix} #{phrase_array.sample} #{culprit}")
 end
 
 
 def will_command(prefix)
-  phrase_array = [ 'Sources say, "No"', 'Yes, definitely.', 'Probably not.', 'If a frog had wings, would it bump its ass a hoppin?',
-                   "I wouldn't bet on it.", 'Most assuredly.', 'Maybe after tea.', 'How should I know?', 'Ask Baga. I think he bought it.' ]
+  phrase_array = [ 
+    'Sources say, "No"', 
+    'Yes, definitely.', 
+    'Probably not.', 
+    'If a frog had wings, would it bump its ass a hoppin?',
+    "I wouldn't bet on it.", 
+    'Most assuredly.', 
+    'Maybe after tea.', 
+    'How should I know?', 
+    'Ask Baga. I think he bought it.',
+    'Probably.',
+    "If the good lord willin' and the creek don't rise",
+    "If the good lord willin' and the creek don't dry up",
+    "Yeah right after someone admits to receding.",
+    'Right after Blood gives up drugs.'
+  ]
   push_message("#{prefix} #{phrase_array.sample}")
 end
 
 
 def how_command(prefix)
-  phrase_array = [ 'By osmosis.', 'By removing his head from his.. hey, whoah, I just saw a trail.', 'North by northweset.',
-                   "By visiting your grandma's place.", "Elementary, Watson.", 'How should I know?', 'I have no idea.', 
-                   'Just follow the instructions.', 'Let me google that for you.' ]
+  phrase_array = [ 
+    'By osmosis.', 
+    'By removing his head from his.. hey, whoah, I just saw a trail.', 
+    'North by northweset.',
+    "By visiting your grandma's place.", 
+    "Elementary, Watson.", 'How should I know?', 
+    'I have no idea.', 
+    'Just follow the instructions.', 
+    'Let me google that for you.',
+    'Let me Bing that for ya...'
+  ]
   push_message("#{prefix} #{phrase_array.sample}")
 end
 
@@ -146,10 +177,18 @@ def fortune_command(prefix)
   push_message("#{prefix} #{fortune}")
 end
 
+
 def store_command(prefix, string, actor)
   string.gsub!(/^store /, '')
   @collection.insert_one({author: actor, quote: "#{actor} stored: #{string}", :created_at => Time.now})
   push_message("#{prefix} Stored.")
+end
+
+
+def meter_command(prefix)
+  dec = rand()
+  num = rand(100)
+  push_message("#{prefix} #{num + dec}")
 end
 
 
@@ -186,6 +225,8 @@ def command_logic(command, page_bool, actor)
     why_command(prefix, actor)
   when /^[wW]ill/
     will_command(prefix)
+  when /ometer/
+    meter_command(prefix)
   when 'stats'
     stats_command(prefix)
   when 'fortune'
