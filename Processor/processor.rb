@@ -37,7 +37,7 @@ def recall_command(prefix, command, actor, with_count=false)
 
   author = nil
   base_command = /^(.*?) /.match(command)[1]
-  if command =~ /recall when/ 
+  if command =~ /recall when / 
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
   elsif command =~ /count when/
