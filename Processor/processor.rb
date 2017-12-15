@@ -52,7 +52,7 @@ def recall_command(prefix, command, actor, with_count=false)
   end
 
   unless _id
-    query[:quote] = /#{regex}/
+    query[:quote] = /#{regex}/i
     query[:author] = author if author
   end
   query_count = @collection.find(query).count
