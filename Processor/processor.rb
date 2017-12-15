@@ -28,6 +28,13 @@ def recall_command(prefix, command, actor, with_count=false)
     id_str = id_match[1]
     command.gsub!(/ with id$/, '')
   end
+
+  output_match = /(with output)$/.match(command)
+  if output_match
+    prefix = ":>>"
+    command.gsub!(/ with output$/, '')
+  end
+
   author = nil
   base_command = /^(.*?) /.match(command)[1]
   if command =~ /recall when/ 
