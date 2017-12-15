@@ -30,13 +30,13 @@ def recall_command(prefix, command, actor, with_count=false)
   end
   author = nil
   base_command = /^(.*?) /.match(command)[1]
-  if command =~ /regex/
-    regex = /regex (.*?)$/.match(command)[1]
-  elsif command =~ /recall when/ 
+  if command =~ /recall when/ 
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
   elsif command =~ /count when/
     author, regex = /count when (.*?) said (.*?)$/.match(command)[1,2]
+  elsif command =~ /^count /
+    regex = /^count (.*?)$/.match(command)[1]
   elsif command =~ /recall id /
     _id = /recall id (.*?)$/.match(command)[1]
     query = { _id: BSON::ObjectId(_id) }
@@ -63,7 +63,7 @@ def recall_command(prefix, command, actor, with_count=false)
       if command =~ /when (.*?) said/
         push_message("#{prefix} #{author} said '#{regex}' AT LEAST #{query_count} times.")
       else
-        push_message("#{prefix} '#{command}' appears #{query_count} times.")
+        push_message("#{prefix} '#{regex}' appears #{query_count} times.")
       end
     else
       push_message("#{prefix} #{quote['created_at']}: #{id_str} #{quote['quote']}")
