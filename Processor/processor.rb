@@ -20,7 +20,7 @@ def push_message(text)
 end
 
 
-def recall_command(prefix, command, actor)
+def recall_command(prefix, command, actor, with_count=false)
   query = { quote: nil }
   id_str = ""
   id_match = /(with id)$/.match(command)
@@ -28,12 +28,15 @@ def recall_command(prefix, command, actor)
     id_str = id_match[1]
     command.gsub!(/ with id$/, '')
   end
+  author = nil
   base_command = /^(.*?) /.match(command)[1]
   if command =~ /regex/
     regex = /regex (.*?)$/.match(command)[1]
-  elsif command =~ /recall when/
+  elsif command =~ /recall when/ 
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
+  elsif command =~ /count when/
+    author, regex = /count when (.*?) said (.*?)$/.match(command)[1,2]
   elsif command =~ /recall id /
     _id = /recall id (.*?)$/.match(command)[1]
     query = { _id: BSON::ObjectId(_id) }
@@ -52,7 +55,15 @@ def recall_command(prefix, command, actor)
     if id_str.length > 1
       id_str = quote['_id']
     end
-    push_message("#{prefix} #{quote['created_at']}: #{id_str} #{quote['quote']}")
+    if with_count
+      if command =~ /when (.*?) said/
+        push_message("#{prefix} #{author} said '#{regex}' AT LEAST #{query_count} times.")
+      else
+        push_message("#{prefix} '#{command}' appears #{query_count} times.")
+      end
+    else
+      push_message("#{prefix} #{quote['created_at']}: #{id_str} #{quote['quote']}")
+    end
   else
     # Found nothing.
     push_message("#{prefix} Sorry, I find no matching entries.")
@@ -134,9 +145,9 @@ end
 def command_logic(command, page_bool, actor)
   prefix = page_bool ? "page #{actor} = : >>" : ":>>"
   base_command = ''
-  if command =~ /^stats/
+  if command =~ /^[sS]tats/
     base_command = 'stats'
-  elsif command =~ /^fortune/
+  elsif command =~ /^[fF]ortune/
     base_command = 'fortune'
   else
     # base_command = /^(.*?)[ "]/.match(command)[1]
@@ -151,6 +162,8 @@ def command_logic(command, page_bool, actor)
   case base_command
   when 'recall'
     recall_command(prefix, command, actor)
+  when /^[cC]ount/
+    recall_command(prefix, command, actor, true)
   when /^[wW]ho/
     # Who based command. Make shit up.
     who_command(prefix)
@@ -196,8 +209,10 @@ begin
     else
       # Record this to the database.
       if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
-        actor = body.split(' ').shift
-        @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
+        if body =~ /^[a-zA-Z0-9]/
+          actor = body.split(' ').shift
+          @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
+        end
       end
     end
   end
