@@ -68,7 +68,7 @@ def recall_command(prefix, command, actor, with_count=false)
     end
     if with_count
       if command =~ /when (.*?) said/
-        push_message("#{prefix} #{author} said '#{regex}' AT LEAST #{query_count} times.")
+        push_message("#{prefix} #{author} said '#{regex}' exactly #{query_count} times.")
       else
         push_message("#{prefix} '#{regex}' appears #{query_count} times.")
       end
