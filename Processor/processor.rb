@@ -20,14 +20,13 @@ def push_message(text)
 end
 
 
-def recall_logic(prefix, command, actor)
-  puts "  Command is: #{command}"
+def recall_command(prefix, command, actor)
   query = { quote: nil }
   id_str = ""
   id_match = /(with id)$/.match(command)
   if id_match
     id_str = id_match[1]
-    command.gsub!(/with id$/, '')
+    command.gsub!(/ with id$/, '')
   end
   base_command = /^(.*?) /.match(command)[1]
   if command =~ /regex/
@@ -37,7 +36,6 @@ def recall_logic(prefix, command, actor)
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
   elsif command =~ /recall id /
     _id = /recall id (.*?)$/.match(command)[1]
-    puts "  ID: #{_id}"
     query = { _id: BSON::ObjectId(_id) }
   else
     regex = /recall (.*?)$/.match(command)[1]
@@ -127,6 +125,7 @@ def fortune_command(prefix)
 end
 
 def store_command(prefix, string, actor)
+  string.gsub!(/^store /, '')
   @collection.insert_one({author: actor, quote: "#{actor} stored: #{string}", :created_at => Time.now})
   push_message("#{prefix} Stored.")
 end
@@ -151,7 +150,7 @@ def command_logic(command, page_bool, actor)
 
   case base_command
   when 'recall'
-    recall_logic(prefix, command, actor)
+    recall_command(prefix, command, actor)
   when /^[wW]ho/
     # Who based command. Make shit up.
     who_command(prefix)

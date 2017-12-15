@@ -5,7 +5,7 @@ require 'bunny'
 ### Now the ingestion stuff.
 @client = Socket.new Socket::AF_INET, Socket::SOCK_STREAM
 
-@client.connect Socket.pack_sockaddr_in(4999, 'del.shutdown.com')
+@client.connect Socket.pack_sockaddr_in(ENV['FAZ_MUD_PORT'], ENV['FAZ_MUD_HOST'])
 
 unless ENV['FAZ_PASS']
   puts "ERROR: Must have a variable set for FAZ_PASS in the local env"
