@@ -49,9 +49,13 @@ def recall_command(prefix, command, actor, with_count=false)
     query[:author] = author if author
   end
   query_count = @collection.find(query).count
-  quote = @collection.find(query).limit(-1).skip(rand(query_count)).first
+  quote = ''
+  unless with_count
+    # Don't need to make the find query if we just want a count.
+    quote = @collection.find(query).limit(-1).skip(rand(query_count)).first
+  end
 
-  if quote
+  if quote or with_count
     if id_str.length > 1
       id_str = quote['_id']
     end
