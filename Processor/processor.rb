@@ -263,6 +263,8 @@ begin
       if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
         if body =~ /^[a-zA-Z0-9]/
           actor = body.split(' ').shift
+         
+          actor = /^[a-zA-Z0-9]+/.match(actor)[0]
           @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
         end
       end
