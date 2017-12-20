@@ -39,8 +39,12 @@ send_channel = sendbunny.create_channel
 sendqueue = send_channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 while line = @client.gets
-  send_channel.default_exchange.publish(line, :routing_key => sendqueue.name)
-  puts "Incoming line: #{line}"
+  if line =~ /^[a-zA-Z0-9]/ and line.split(' ').count > 1
+    if line =~ /page/ or line =~ /, "/
+      send_channel.default_exchange.publish(line, :routing_key => sendqueue.name)
+      puts "Incoming line: #{line}"
+    end
+  end
 end
 
 send_bunny.close

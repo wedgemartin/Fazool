@@ -240,19 +240,27 @@ end
 
 
 begin
-  puts "Subscribing to queue 'del-received'..."
+  puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}-received'..."
   queue.subscribe(:block => true) do |delivery_info, properties, body|
     puts " Got body from bus: #{body}"
     # Body will either be a request for data recall
     #   or stuff that needs to be filtered/recorded in the DB
-    if body =~ /"Faz(...)?,/ or body =~ / to you\./
+    if body =~ /"Faz(...)?,/ or body =~ / to you\./ or body =~ / pages: /
       # We have a command.
-      if body =~ / to you\./ or body =~ / pages: /
+      page_type = "MUCK"
+      if body =~ / to you\./
         is_page = true
+      elsif body =~ / pages: /
+        is_page = true
+        page_type = "MUSH"
       end
       request = nil
       if is_page
-        request = /"(.*?)"/.match(body)[1]
+        if page_type == "MUCK"
+          request = /"(.*?)"/.match(body)[1]
+        else
+          request = /pages: (.*?)$/.match(body)[1]
+        end
       else
         request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
       end
