@@ -7,12 +7,12 @@ require 'mongo'
 bunny = Bunny.new
 bunny.start
 @channel = bunny.create_channel
-queue = @channel.queue('del_received')
+queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
 @collection = @mongo[:quotes]
 
-@routing_key = "send_to_del"
+@routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
 
 
 def push_message(text)

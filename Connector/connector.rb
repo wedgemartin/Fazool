@@ -19,7 +19,7 @@ Thread.new do
   bunny = Bunny.new
   bunny.start
   channel = bunny.create_channel
-  queue = channel.queue('send_to_del')
+  queue = channel.queue("send_to_#{ENV['FAZ_QUEUE_NAME']}")
   begin
     queue.subscribe(:block => true) do |delivery_info, properties, body|
       puts " Got body from Processor: #{body}"
@@ -36,7 +36,7 @@ end
 sendbunny = Bunny.new
 sendbunny.start
 send_channel = sendbunny.create_channel
-sendqueue = send_channel.queue('del_received')
+sendqueue = send_channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 while line = @client.gets
   send_channel.default_exchange.publish(line, :routing_key => sendqueue.name)
