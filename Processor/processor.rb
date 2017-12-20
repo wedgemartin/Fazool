@@ -247,7 +247,9 @@ begin
     #   or stuff that needs to be filtered/recorded in the DB
     if body =~ /"Faz(...)?,/ or body =~ / to you\./
       # We have a command.
-      is_page = body =~ / to you\./ ? true : false
+      if body =~ / to you\./ or body =~ / pages: /
+        is_page = true
+      end
       request = nil
       if is_page
         request = /"(.*?)"/.match(body)[1]
