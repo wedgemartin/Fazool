@@ -40,15 +40,19 @@ def recall_command(prefix, command, actor, with_count=false)
   if command =~ /recall when / 
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
+    author.strip!
+    regex.strip!
   elsif command =~ /count when/
     author, regex = /count when (.*?) said (.*?)$/.match(command)[1,2]
+    author.strip!
+    regex.strip!
   elsif command =~ /^count /
-    regex = /^count (.*?)$/.match(command)[1]
+    regex = /^count (.*?)$/.match(command)[1].strip
   elsif command =~ /recall id /
-    _id = /recall id (.*?)$/.match(command)[1]
+    _id = /recall id (.*?)$/.match(command)[1].strip
     query = { _id: BSON::ObjectId(_id) }
   else
-    regex = /recall (.*?)$/.match(command)[1]
+    regex = /recall (.*?)$/.match(command)[1].strip
   end
 
   unless _id
@@ -251,6 +255,7 @@ begin
       if body =~ / to you\./
         is_page = true
       elsif body =~ / pages: /
+puts "  PAGE TTPE IS MUSH"
         is_page = true
         page_type = "MUSH"
       end
@@ -266,6 +271,7 @@ begin
       end
       actor = body.split(' ').shift
       if request
+puts " REQUSET IS #{request}"
         command_logic(request, is_page, actor)
       end
     else
