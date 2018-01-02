@@ -14,11 +14,33 @@ queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 @routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
 
+COMMANDS = { 
+  'help'            => "Display this help text",
+  'who <text>'      => 'Who dunnit?',
+  'what <text>'     => "Arbitrary questions around 'what' i.e. 'What gives?'",
+  'what time is it' => "Self explanatory",
+  'how <text>'      => "How questions: How is the sky blue?",
+  'why <text>'      => "Why questions",
+  'will <text>'     => "Will Jerry go to the dance?",
+  'recall <text>'   => "recall lol",
+  'recall when <author> said <text>'  => "recall when Joey said hello",
+  '<text>ometer'    => "Faz, what does the funnyometer say?",
+  'stats' =>  "Reports simple stats",
+  'fortune' => "Returns a BSD fortune",
+  'store' => "Store phrase to be recalled"
+}
+
 
 def push_message(text)
   @channel.default_exchange.publish(text, :routing_key => @routing_key)
 end
 
+
+def help_command(prefix)
+  COMMANDS.each do |k,v|
+    push_message("#{prefix} #{k} > #{v}")
+  end
+end
 
 def recall_command(prefix, command, actor, with_count=false)
   query = { quote: nil }
@@ -214,6 +236,8 @@ def command_logic(command, page_bool, actor)
   end
 
   case base_command
+  when 'help'
+    help_command(prefix)
   when 'recall'
     recall_command(prefix, command, actor)
   when /^[cC]ount/
@@ -255,7 +279,6 @@ begin
       if body =~ / to you\./
         is_page = true
       elsif body =~ / pages: /
-puts "  PAGE TTPE IS MUSH"
         is_page = true
         page_type = "MUSH"
       end
@@ -271,7 +294,6 @@ puts "  PAGE TTPE IS MUSH"
       end
       actor = body.split(' ').shift
       if request
-puts " REQUSET IS #{request}"
         command_logic(request, is_page, actor)
       end
     else
@@ -279,7 +301,6 @@ puts " REQUSET IS #{request}"
       if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
         if body =~ /^[a-zA-Z0-9]/
           actor = body.split(' ').shift
-         
           actor = /^[a-zA-Z0-9]+/.match(actor)[0]
           @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
         end
