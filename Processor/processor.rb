@@ -2,6 +2,7 @@
 
 require 'bunny'
 require 'mongo'
+require 'json'
 
 ### Start thread to read messages off the bus and act accordingly.
 bunny = Bunny.new
@@ -303,6 +304,14 @@ begin
           actor = body.split(' ').shift
           actor = /^[a-zA-Z0-9]+/.match(actor)[0]
           @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
+          if body =~ /https?:/
+            url = body.match(/(http.*?)[ "]/)[0].to_s
+            url.gsub!(/"$/, '')
+            key = ENV['FAZ_SHORTENER_KEY']
+            shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{url}"}' 2>/dev/null`
+            url_json = JSON.parse(shortened)
+            push_message("say #{url_json['id']}")
+          end
         end
       end
     end
