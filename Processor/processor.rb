@@ -169,11 +169,16 @@ def what_command(prefix, command, actor)
   elsif command =~ /the fuck/i
     push_message("#{prefix} I bet you expect me to say 'Indeed.' but I'm not your stupid Slack bot.")
   else
-    count = @collection.count()
-    random_quote = @collection.find().limit(-1).skip(rand(count)).first
-    thing = random_quote['quote'].split(' ').sample.gsub('"', '')
-    phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
-    push_message("#{prefix} #{phrase_array.sample} '#{thing}', #{actor}")
+    count = @collection.find(:quote => /"[iI]t /).count()
+    random = @collection.find(:quote => /"[iI]t /).limit(-1).skip(rand(count)).first
+    # thing = random_quote['quote'].split(' ').sample.gsub('"', '')
+    # phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
+    # push_message("#{prefix} #{phrase_array.sample} '#{thing}', #{actor}")
+    if random
+      push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
+    else 
+      push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
+    end
   end
 end
 
@@ -228,7 +233,11 @@ def command_logic(command, page_bool, actor)
     base_command = 'fortune'
   else
     # base_command = /^(.*?)[ "]/.match(command)[1]
-    base_command = /^(.*?) /.match(command)
+    if command =~ / /
+      base_command = /^(.*?) /.match(command)
+    else 
+      base_command = /^(\w+)/.match(command)
+    end
     if base_command
       base_command = base_command[1]
     else
