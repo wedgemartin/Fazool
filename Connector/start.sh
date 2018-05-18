@@ -21,7 +21,7 @@ CHECK=`ps auxwwww | grep connector.rb | grep -v grep | grep -v ack | awk '{print
 
 if [ "x${CHECK}" != "x" ];then
   echo "There is already a Fazool Connector running with PID ${CHECK}"
-  exit 1
+  # exit 1
 fi
 
 CONNECTOR_PATH=`dirname $0`

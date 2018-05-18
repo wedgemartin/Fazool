@@ -16,19 +16,20 @@ queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 @routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
 
 COMMANDS = { 
-  'help'            => "Display this help text",
-  'who <text>'      => 'Who dunnit?',
-  'what <text>'     => "Arbitrary questions around 'what' i.e. 'What gives?'",
-  'what time is it' => "Self explanatory",
-  'how <text>'      => "How questions: How is the sky blue?",
-  'why <text>'      => "Why questions",
-  'will <text>'     => "Will Jerry go to the dance?",
-  'recall <text>'   => "recall lol",
+  'help'               => "Display this help text",
+  'weather <location>' => 'Check weather',
+  'who <text>'         => 'Who dunnit?',
+  'what <text>'        => "Arbitrary questions around 'what' i.e. 'What gives?'",
+  'what time is it'    => "Self explanatory",
+  'how <text>'         => "How questions: How is the sky blue?",
+  'why <text>'         => "Why questions",
+  'will <text>'        => "Will Jerry go to the dance?",
+  'recall <text>'      => "recall lol",
   'recall when <author> said <text>'  => "recall when Joey said hello",
-  '<text>ometer'    => "Faz, what does the funnyometer say?",
-  'stats' =>  "Reports simple stats",
-  'fortune' => "Returns a BSD fortune",
-  'store' => "Store phrase to be recalled"
+  '<text>ometer'       => "Faz, what does the funnyometer say?",
+  'stats'              =>  "Reports simple stats",
+  'fortune'            => "Returns a BSD fortune",
+  'store'              => "Store phrase to be recalled"
 }
 
 
@@ -43,19 +44,32 @@ def help_command(prefix)
   end
 end
 
+def weather_command(prefix, locale)
+  locale.chomp!
+  puts "Locale requested: #{locale}"
+  weather = `curl -B http://wttr.in/#{locale} 2>/dev/null | head -7`
+  puts " Weather response: #{weather}"
+  push_message("#{prefix} : #{weather}")
+  weather.split('\n').each do |x|
+    push_message("#{prefix} : #{x}")
+  end
+end
+
 def recall_command(prefix, command, actor, with_count=false)
   query = { quote: nil }
   id_str = ""
-  id_match = /(with id)$/.match(command)
+  id_match = /( with id)(?:$|\r|\n)/.match(command)
+  puts " id_match: #{id_match}"
+  puts " command: #{command}"
   if id_match
     id_str = id_match[1]
-    command.gsub!(/ with id$/, '')
+    command.gsub!(/ with id(?:$|\r|\n)/, '')
   end
 
-  output_match = /(with output)$/.match(command)
+  output_match = /( with output)(?:$|\r|\n)/.match(command)
   if output_match
     prefix = ":>>"
-    command.gsub!(/ with output$/, '')
+    command.gsub!(/ with output(?:$|\r|\n)/, '')
   end
 
   author = nil
@@ -248,6 +262,8 @@ def command_logic(command, page_bool, actor)
   case base_command
   when 'help'
     help_command(prefix)
+  when 'weather'
+    weather_command(prefix, command.split(' ')[1])
   when 'recall'
     recall_command(prefix, command, actor)
   when /^[cC]ount/

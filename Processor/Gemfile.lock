@@ -1,5 +1,5 @@
 GEM
-  remote: https://rubygems.org/
+  remote: http://rubygems.org/
   specs:
     amq-protocol (2.2.0)
     bson (4.2.2)
@@ -16,4 +16,4 @@ DEPENDENCIES
   mongo
 
 BUNDLED WITH
-   1.16.0
+   1.16.2

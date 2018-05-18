@@ -6,7 +6,7 @@ CHECK=`ps auxwwww | grep processor.rb | grep -v grep | grep -v ack | awk '{print
 
 if [ "x${CHECK}" != "x" ];then
   echo "There is already a Fazool Processor running with PID ${CHECK}"
-  exit 1
+  # exit 1
 fi
 
 PROCESSOR_PATH=`dirname $0`
