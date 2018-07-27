@@ -44,6 +44,14 @@ def help_command(prefix)
   end
 end
 
+def news_command(prefix)
+  news = `curl -s http://feeds.bbci.co.uk/news/rss.xml | grep "<title>" | sed 's/ <title><\\!\\[CDATA\\[//g; s/\\]\\]><\\/title>//;' | grep -v "BBC News" | head -8`
+  news.split(/\n/).each do |n|
+    push_message("#{prefix} #{n}")
+  end
+end
+
+
 def weather_command(prefix, locale)
   locale.chomp!
   puts "Locale requested: #{locale}"
@@ -264,6 +272,8 @@ def command_logic(command, page_bool, actor)
     help_command(prefix)
   when 'weather'
     weather_command(prefix, command.split(' ')[1])
+  when 'news'
+    news_command(prefix)
   when 'recall'
     recall_command(prefix, command, actor)
   when /^[cC]ount/
