@@ -45,7 +45,8 @@ def help_command(prefix)
 end
 
 def news_command(prefix)
-  news = `curl -s http://feeds.bbci.co.uk/news/rss.xml | grep "<title>" | sed 's/ <title><\\!\\[CDATA\\[//g; s/\\]\\]><\\/title>//;' | grep -v "BBC News" | head -8`
+  # news = `curl -s http://feeds.bbci.co.uk/news/rss.xml | grep "<title>" | sed 's/ <title><\\!\\[CDATA\\[//g; s/\\]\\]><\\/title>//;' | grep -v "BBC News" | head -8`
+  news = `curl -s http://feeds.skynews.com/feeds/rss/world.xml | grep "<title>" | sed -e 's/<title>//' | sed -e 's/<\\/title>//' | grep -v "World News" | head -8`
   news.split(/\n/).each do |n|
     push_message("#{prefix} #{n}")
   end
