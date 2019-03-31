@@ -3,6 +3,8 @@
 require 'bunny'
 require 'mongo'
 require 'json'
+require 'net/http'
+require 'crack/xml'
 
 ### Start thread to read messages off the bus and act accordingly.
 bunny = Bunny.new
@@ -45,10 +47,17 @@ def help_command(prefix)
 end
 
 def news_command(prefix)
-  # news = `curl -s http://feeds.bbci.co.uk/news/rss.xml | grep "<title>" | sed 's/ <title><\\!\\[CDATA\\[//g; s/\\]\\]><\\/title>//;' | grep -v "BBC News" | head -8`
-  news = `curl -s http://feeds.skynews.com/feeds/rss/world.xml | grep "<title>" | sed -e 's/<title>//' | sed -e 's/<\\/title>//' | grep -v "World News" | head -8`
-  news.split(/\n/).each do |n|
-    push_message("#{prefix} #{n}")
+  key = ENV['FAZ_SHORTENER_KEY']
+  body = Net::HTTP.get('feeds.skynews.com', '/feeds/rss/world.xml')
+  parsed = Crack::XML.parse(body)
+  items = parsed["rss"]["channel"]["item"]
+  items.each do |item|
+    title = item["title"].strip
+    title = title.sub(/<a.+?>/, '').sub('</a>', '')
+    link = item["link"].strip
+    shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{link}"}' 2>/dev/null`
+    resp = JSON.parse(shortened)
+    push_message("#{resp['id']} - #{title}")
   end
 end
 
