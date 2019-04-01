@@ -50,6 +50,7 @@ def news_command(prefix)
   key = ENV['FAZ_SHORTENER_KEY']
   body = Net::HTTP.get('feeds.skynews.com', '/feeds/rss/world.xml')
   parsed = Crack::XML.parse(body)
+puts " PARSED: #{parsed.inspect}"
   items = parsed["rss"]["channel"]["item"]
   items.each do |item|
     title = item["title"].strip
@@ -57,7 +58,7 @@ def news_command(prefix)
     link = item["link"].strip
     shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{link}"}' 2>/dev/null`
     resp = JSON.parse(shortened)
-    push_message("#{resp['id']} - #{title}")
+    push_message("#{prefix} #{resp['id']} - #{title}")
   end
 end
 

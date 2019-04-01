@@ -5,14 +5,18 @@ GEM
     bson (4.2.2)
     bunny (2.7.2)
       amq-protocol (>= 2.2.0)
+    crack (0.4.3)
+      safe_yaml (~> 1.0.0)
     mongo (2.4.3)
       bson (>= 4.2.1, < 5.0.0)
+    safe_yaml (1.0.5)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
   bunny
+  crack
   mongo
 
 BUNDLED WITH
