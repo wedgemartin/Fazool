@@ -48,6 +48,7 @@ end
 
 def news_command(prefix)
   key = ENV['FAZ_SHORTENER_KEY']
+  shortener_login = ENV['FAZ_SHORTENER_LOGIN']
   body = Net::HTTP.get('feeds.skynews.com', '/feeds/rss/world.xml')
   parsed = Crack::XML.parse(body)
 puts " PARSED: #{parsed.inspect}"
@@ -56,9 +57,12 @@ puts " PARSED: #{parsed.inspect}"
     title = item["title"].strip
     title = title.sub(/<a.+?>/, '').sub('</a>', '')
     link = item["link"].strip
-    shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{link}"}' 2>/dev/null`
+    # shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{link}"}' 2>/dev/null`
+    shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{link}&version=2.0.1' 2>/dev/null`
+puts " SHORTENED: #{shortened}"
     resp = JSON.parse(shortened)
-    push_message("#{prefix} #{resp['id']} - #{title}")
+puts " RESP: #{resp.inspect}"
+    push_message("#{prefix} #{resp['data']['url']} - #{title}")
   end
 end
 
