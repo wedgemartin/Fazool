@@ -51,17 +51,13 @@ def news_command(prefix)
   shortener_login = ENV['FAZ_SHORTENER_LOGIN']
   body = Net::HTTP.get('feeds.skynews.com', '/feeds/rss/world.xml')
   parsed = Crack::XML.parse(body)
-puts " PARSED: #{parsed.inspect}"
   items = parsed["rss"]["channel"]["item"]
   items.each do |item|
     title = item["title"].strip
     title = title.sub(/<a.+?>/, '').sub('</a>', '')
     link = item["link"].strip
-    # shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{link}"}' 2>/dev/null`
     shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{link}&version=2.0.1' 2>/dev/null`
-puts " SHORTENED: #{shortened}"
     resp = JSON.parse(shortened)
-puts " RESP: #{resp.inspect}"
     push_message("#{prefix} #{resp['data']['url']} - #{title}")
   end
 end
@@ -358,9 +354,10 @@ begin
             url = body.match(/(http.*?)[ "]/)[0].to_s
             url.gsub!(/"$/, '')
             key = ENV['FAZ_SHORTENER_KEY']
-            shortened = `curl https://www.googleapis.com/urlshortener/v1/url\?key=#{key} -H 'Content-Type: application/json' -d '{"longUrl": "#{url}"}' 2>/dev/null`
-            url_json = JSON.parse(shortened)
-            push_message("say #{url_json['id']}")
+            shortener_login = ENV['FAZ_SHORTENER_LOGIN']
+            shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{url}&version=2.0.1' 2>/dev/null`
+            resp = JSON.parse(shortened)
+            push_message("say #{resp['data']['url']}")
           end
         end
       end
