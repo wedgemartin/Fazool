@@ -17,7 +17,7 @@ queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 @routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
 
-COMMANDS = { 
+COMMANDS = {
   'help'               => "Display this help text",
   'weather <location>' => 'Check weather',
   'who <text>'         => 'Who dunnit?',
@@ -25,7 +25,9 @@ COMMANDS = {
   'what time is it'    => "Self explanatory",
   'how <text>'         => "How questions: How is the sky blue?",
   'why <text>'         => "Why questions",
+  'when <text>'        => "When questions i.e. when will i get married?",
   'will <text>'        => "Will Jerry go to the dance?",
+  'should <text>'      => "Should I play the lottery?",
   'recall <text>'      => "recall lol",
   'recall when <author> said <text>'  => "recall when Joey said hello",
   '<text>ometer'       => "Faz, what does the funnyometer say?",
@@ -93,7 +95,7 @@ def recall_command(prefix, command, actor, with_count=false)
 
   author = nil
   base_command = /^(.*?) /.match(command)[1]
-  if command =~ /recall when / 
+  if command =~ /recall when /
     # Need to get by user.
     author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
     author.strip!
@@ -121,6 +123,7 @@ def recall_command(prefix, command, actor, with_count=false)
     # Don't need to make the find query if we just want a count.
     quote = @collection.find(query).limit(-1).skip(rand(query_count)).first
   end
+  puts "  QUOTE: #{quote.inspect}"
 
   if quote or with_count
     if id_str.length > 1
@@ -133,7 +136,7 @@ def recall_command(prefix, command, actor, with_count=false)
         push_message("#{prefix} '#{regex}' appears #{query_count} times.")
       end
     else
-      push_message("#{prefix} #{quote['created_at']}: #{id_str} #{quote['quote']}")
+      push_message("#{prefix} #{quote['created_at']}: #{quote['forced_by'] ? "<force by #{quote['forced_by']}>" : '' } #{id_str} #{quote['quote']}")
     end
   else
     # Found nothing.
@@ -145,12 +148,12 @@ end
 def who_command(prefix)
   distinct_count = @collection.distinct('author').count
   culprit = @collection.distinct('author').sample
-  phrase_array = [ 
-    'It was probably', 
-    "I'm guessing", 
-    "Wouldn't bet on it, but I've got 5 dollars on", 
-    ' ', 
-    'Your mother told me it was',  
+  phrase_array = [
+    'It was probably',
+    "I'm guessing",
+    "Wouldn't bet on it, but I've got 5 dollars on",
+    ' ',
+    'Your mother told me it was',
     "Don't you think it might've been",
     "Smells like",
     "Could be"
@@ -160,15 +163,15 @@ end
 
 
 def will_command(prefix)
-  phrase_array = [ 
-    'Sources say, "No"', 
-    'Yes, definitely.', 
-    'Probably not.', 
+  phrase_array = [
+    'Sources say, "No"',
+    'Yes, definitely.',
+    'Probably not.',
     'If a frog had wings, would it bump its ass a hoppin?',
-    "I wouldn't bet on it.", 
-    'Most assuredly.', 
-    'Maybe after tea.', 
-    'How should I know?', 
+    "I wouldn't bet on it.",
+    'Most assuredly.',
+    'Maybe after tea.',
+    'How should I know?',
     'Ask Baga. I think he bought it.',
     'Probably.',
     "If the good lord willin' and the creek don't rise",
@@ -181,11 +184,11 @@ end
 
 
 def how_command(prefix)
-  phrase_array = [ 
-    'By osmosis.', 
-    'By removing his head from his.. hey, whoah, I just saw a trail.', 
+  phrase_array = [
+    'By osmosis.',
+    'By removing his head from his.. hey, whoah, I just saw a trail.',
     'North by northweset.',
-    "By visiting your grandma's place.", 
+    "By visiting your grandma's place.",
     "Elementary, Watson.", 'How should I know?', 
     'I have no idea.', 
     'Just follow the instructions.', 
@@ -195,6 +198,15 @@ def how_command(prefix)
   push_message("#{prefix} #{phrase_array.sample}")
 end
 
+def when_command(prefix, actor)
+  count = @collection.find(:quote => /"[wW]hen/).count
+  random = @collection.find(:quote => /"[wW]hen/).limit(-1).skip(rand(count)).first
+  if random
+    push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
+  else 
+    push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
+  end
+end
 
 def what_command(prefix, command, actor)
   if command =~ /time is/
@@ -298,7 +310,11 @@ def command_logic(command, page_bool, actor)
     how_command(prefix)
   when /^[wW]hy/
     why_command(prefix, actor)
+  when /^[wW]hen/
+    when_command(prefix, actor)
   when /^[wW]ill/
+    will_command(prefix)
+  when /^[sS]hould/
     will_command(prefix)
   when /ometer/
     meter_command(prefix)
@@ -346,12 +362,22 @@ begin
     else
       # Record this to the database.
       if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
-        if body =~ /^[a-zA-Z0-9]/
+        if body =~ /^\[[a-zA-Z0-9]/
+          real_body = body.match(/^\[.*?\](.*)/).captures[0]
           actor = body.split(' ').shift
-          actor = /^[a-zA-Z0-9]+/.match(actor)[0]
-          @collection.insert_one({author: actor, quote: body, :created_at => Time.now})
-          if body =~ /https?:/
-            url = body.match(/(http.*?)[ "]/)[0].to_s
+          author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/).captures[0]
+          if actor =~ /<-/ # this is a force.
+            # look up author_id
+            forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
+            forced_by = @collection.find(author_id: forced_by_id).first['author']
+          end
+          actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
+          if forced_by_id
+            puts "#{forced_by} forced #{actor}"
+          end
+          @collection.insert_one({author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by})
+          if real_body =~ /https?:/
+            url = real_body.match(/(http.*?)[ "]/)[0].to_s
             url.gsub!(/"$/, '')
             key = ENV['FAZ_SHORTENER_KEY']
             shortener_login = ENV['FAZ_SHORTENER_LOGIN']
