@@ -115,7 +115,12 @@ def recall_command(prefix, command, actor, with_count=false)
 
   unless _id
     query[:quote] = /#{regex}/i
-    query[:author] = author if author
+    author_id = @collection.find(author: author).first['author_id']
+    if author_id
+      query[:author_id] = author_id
+    else
+      query[:author] = author if author
+    end
   end
   query_count = @collection.find(query).count
   quote = ''
@@ -241,7 +246,7 @@ end
 
 def stats_command(prefix)
   count = @collection.count()
-  author_count = @collection.distinct('author').count
+  author_count = @collection.distinct('author_id').count
   push_message("#{prefix} There are currently #{count} entries in my database from #{author_count} different authors.")
 end
 
