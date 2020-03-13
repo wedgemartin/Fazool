@@ -33,7 +33,8 @@ COMMANDS = {
   '<text>ometer'       => "Faz, what does the funnyometer say?",
   'stats'              =>  "Reports simple stats",
   'fortune'            => "Returns a BSD fortune",
-  'store'              => "Store phrase to be recalled"
+  'store'              => "Store phrase to be recalled",
+  'robinhood'          => "Check status of Robinhood"
 }
 
 
@@ -45,6 +46,17 @@ end
 def help_command(prefix)
   COMMANDS.each do |k,v|
     push_message("#{prefix} #{k} > #{v}")
+  end
+end
+
+def robinhood_command(prefix)
+  response = Net::HTTP.get_response(URI('https://status.robinhood.com'))
+  if response.body =~ /span.*utage/
+    push_message("#{prefix} Robinhood is currently having an outage.")
+  elsif response.body =~ /span.*egraded/
+    push_message("#{prefix} Robinhood system is degraded.")
+  else
+    push_message("#{prefix} Robinhood is operational")
   end
 end
 
@@ -68,11 +80,12 @@ end
 def weather_command(prefix, locale)
   locale.chomp!
   puts "Locale requested: #{locale}"
-  weather = `curl -B http://wttr.in/#{locale} 2>/dev/null | head -7`
+  # sed 's/\x1b\[[0-9;]*m//g'
+  weather = `curl -B http://wttr.in/#{locale}?T 2>/dev/null | head -7`
   puts " Weather response: #{weather}"
   push_message("#{prefix} : #{weather}")
-  weather.split('\n').each do |x|
-    push_message("#{prefix} : #{x}")
+  weather.split("\n").each do |x|
+    push_message("#{prefix} : #{x.gsub(' ', '%b').gsub('B0', '').gsub(/\\/, '%\\')}")
   end
 end
 
@@ -115,7 +128,10 @@ def recall_command(prefix, command, actor, with_count=false)
 
   unless _id
     query[:quote] = /#{regex}/i
-    author_id = @collection.find(author: author).first['author_id']
+    atmp = @collection.find(author: author, quote: {"$ne": nil}).first
+    if atmp
+      author_id = atmp['author_id']
+    end
     if author_id
       query[:author_id] = author_id
     else
@@ -151,8 +167,8 @@ end
 
 
 def who_command(prefix)
-  distinct_count = @collection.distinct('author').count
-  culprit = @collection.distinct('author').sample
+  culprit_id = @collection.distinct('author_id').sample
+  culprit = @collection.find({author_id: culprit_id}).first['author']
   phrase_array = [
     'It was probably',
     "I'm guessing",
@@ -172,7 +188,15 @@ def will_command(prefix)
     'Sources say, "No"',
     'Yes, definitely.',
     'Probably not.',
+    'Yes.',
+    'No.',
+    'Affirmative.',
+    "I don't know, but unicorns ROCK!",
+    'Surely.',
+    'Negative, ghost rider.',
+    'Not on your life',
     'If a frog had wings, would it bump its ass a hoppin?',
+    "In the words of 60 of Bill Cosby's friends, 'No.'",
     "I wouldn't bet on it.",
     'Most assuredly.',
     'Maybe after tea.',
@@ -275,6 +299,7 @@ end
 
 
 def command_logic(command, page_bool, actor)
+  puts "  ACTOR HERE IS: #{actor}"
   prefix = page_bool ? "page #{actor} = : >>" : ":>>"
   base_command = ''
   if command =~ /^[sS]tats/
@@ -302,6 +327,8 @@ def command_logic(command, page_bool, actor)
     weather_command(prefix, command.split(' ')[1])
   when 'news'
     news_command(prefix)
+  when 'robinhood'
+    robinhood_command(prefix)
   when 'recall'
     recall_command(prefix, command, actor)
   when /^[cC]ount/
@@ -360,7 +387,7 @@ begin
       else
         request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
       end
-      actor = body.split(' ').shift
+      actor = /^\[(.*?)\(/.match(body)[1]
       if request
         command_logic(request, is_page, actor)
       end
@@ -370,25 +397,24 @@ begin
         if body =~ /^\[[a-zA-Z0-9]/
           real_body = body.match(/^\[.*?\](.*)/).captures[0]
           actor = body.split(' ').shift
-          author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/).captures[0]
-          if actor =~ /<-/ # this is a force.
-            # look up author_id
-            forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
-            forced_by = @collection.find(author_id: forced_by_id).first['author']
-          end
-          actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
-          if forced_by_id
-            puts "#{forced_by} forced #{actor}"
-          end
-          @collection.insert_one({author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by})
-          if real_body =~ /https?:/
-            url = real_body.match(/(http.*?)[ "]/)[0].to_s
-            url.gsub!(/"$/, '')
-            key = ENV['FAZ_SHORTENER_KEY']
-            shortener_login = ENV['FAZ_SHORTENER_LOGIN']
-            shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{url}&version=2.0.1' 2>/dev/null`
-            resp = JSON.parse(shortened)
-            push_message("say #{resp['data']['url']}")
+          if actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/)
+            author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/).captures[0]
+            if actor =~ /<-/ # this is a force.
+              # look up author_id
+              forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
+              forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
+            end
+            actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
+            @collection.insert_one({author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by})
+            if real_body =~ /https?:/
+              url = real_body.match(/(http.*?)[ "]/)[0].to_s
+              url.gsub!(/"$/, '')
+              key = ENV['FAZ_SHORTENER_KEY']
+              shortener_login = ENV['FAZ_SHORTENER_LOGIN']
+              shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{url}&version=2.0.1' 2>/dev/null`
+              resp = JSON.parse(shortened)
+              push_message("say #{resp['data']['url']}")
+            end
           end
         end
       end
