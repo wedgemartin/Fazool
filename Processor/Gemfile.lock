@@ -1,14 +1,14 @@
 GEM
   remote: http://rubygems.org/
   specs:
-    amq-protocol (2.2.0)
-    bson (4.2.2)
-    bunny (2.7.2)
-      amq-protocol (>= 2.2.0)
+    amq-protocol (2.3.0)
+    bson (4.8.2)
+    bunny (2.14.4)
+      amq-protocol (~> 2.3, >= 2.3.0)
     crack (0.4.3)
       safe_yaml (~> 1.0.0)
-    mongo (2.4.3)
-      bson (>= 4.2.1, < 5.0.0)
+    mongo (2.11.4)
+      bson (>= 4.4.2, < 5.0.0)
     safe_yaml (1.0.5)
 
 PLATFORMS
@@ -20,4 +20,4 @@ DEPENDENCIES
   mongo
 
 BUNDLED WITH
-   1.16.2
+   1.17.3

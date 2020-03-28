@@ -37,7 +37,8 @@ COMMANDS = {
   'stats'              =>  "Reports simple stats",
   'fortune'            => "Returns a BSD fortune",
   'store'              => "Store phrase to be recalled",
-  'robinhood'          => "Check status of Robinhood"
+  'robinhood'          => "Check status of Robinhood",
+  'market'             => "Check status of stock market"
 }
 
 
@@ -62,6 +63,37 @@ def robinhood_command(prefix)
     push_message("#{prefix} Robinhood is operational")
   end
 end
+
+def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets/628578697fb24d8ea4c32fa0c5ae1843_0.geojson', limit=10)
+  url = URI.parse(location)
+  req = Net::HTTP::Get.new(url.path, {'User-Agent' => 'Mozilla/5.0'})
+  res = Net::HTTP.start(url.hostname, url.port, use_ssl: true) {|http|
+    http.request(req)
+  }
+  case res 
+  when Net::HTTPSuccess     then res 
+  when Net::HTTPRedirection then covid_command(res['location'], limit - 1)
+  else
+    response.error!
+  end 
+  parsed = JSON.parse(res.body)
+  death_count = 0 
+  case_count = 0 
+  recovery_count = 0 
+   puts " REGION: '#{region}'"
+  if region != ''
+    region_data = parsed['features'].select{|x| x['properties']['Province_State'] =~ /#{region}/i}
+    region_data.map{|x| death_count += x['properties']['Deaths']}
+    region_data.map{|x| recovery_count += x['properties']['Recovered']}
+    region_data.map{|x| case_count += x['properties']['Confirmed']}
+  else
+    parsed['features'].map{|x| death_count += x['properties']['Deaths']}
+    parsed['features'].map{|x| case_count += x['properties']['Confirmed']}
+    parsed['features'].map{|x| recovery_count += x['properties']['Recovered']}
+  end 
+  push_message("#{prefix} COVID19 #{region == '' ?  "USA" : region} - Deaths: #{death_count}  Cases: #{case_count}  Recoveries: #{recovery_count}")
+end
+
 
 def news_command(prefix)
   key = ENV['FAZ_SHORTENER_KEY']
@@ -231,8 +263,8 @@ def how_command(prefix)
 end
 
 def when_command(prefix, actor)
-  count = @collection.find(:quote => /"[wW]hen/).count
-  random = @collection.find(:quote => /"[wW]hen/).limit(-1).skip(rand(count)).first
+  count = @collection.find(:quote => /"[wW]hen /).count
+  random = @collection.find(:quote => /"[wW]hen /).limit(-1).skip(rand(count)).first
   if random
     push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
   else 
@@ -332,6 +364,8 @@ def command_logic(command, page_bool, actor)
     news_command(prefix)
   when 'robinhood'
     robinhood_command(prefix)
+  when 'covid'
+    covid_command(prefix, command.split(' ')[1..9].join(' '))
   when 'recall'
     recall_command(prefix, command, actor)
   when /^[cC]ount/
@@ -347,6 +381,10 @@ def command_logic(command, page_bool, actor)
     why_command(prefix, actor)
   when /^[wW]hen/
     when_command(prefix, actor)
+  when /^[aA]re/
+    will_command(prefix)
+  when /^[iI]s/
+    will_command(prefix)
   when /^[wW]ill/
     will_command(prefix)
   when /^[sS]hould/
