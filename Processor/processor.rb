@@ -64,7 +64,11 @@ def robinhood_command(prefix)
   end
 end
 
-def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets/628578697fb24d8ea4c32fa0c5ae1843_0.geojson', limit=10)
+def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets/1cb306b5331945548745a5ccd290188e_1.geojson', limit=10)
+  if region and region =~ /^usa$/i
+    region.upcase!
+    location = 'https://opendata.arcgis.com/datasets/628578697fb24d8ea4c32fa0c5ae1843_0.geojson'
+  end
   url = URI.parse(location)
   req = Net::HTTP::Get.new(url.path, {'User-Agent' => 'Mozilla/5.0'})
   res = Net::HTTP.start(url.hostname, url.port, use_ssl: true) {|http|
@@ -81,8 +85,11 @@ def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets
   case_count = 0 
   recovery_count = 0 
    puts " REGION: '#{region}'"
-  if region != ''
+  if region != '' and region != 'USA'
     region_data = parsed['features'].select{|x| x['properties']['Province_State'] =~ /#{region}/i}
+    if region_data.count == 0 # try Country Region
+      region_data = parsed['features'].select{|x| x['properties']['Country_Region'] =~ /#{region}/i}
+    end
     region_data.map{|x| death_count += x['properties']['Deaths']}
     region_data.map{|x| recovery_count += x['properties']['Recovered']}
     region_data.map{|x| case_count += x['properties']['Confirmed']}
@@ -91,7 +98,10 @@ def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets
     parsed['features'].map{|x| case_count += x['properties']['Confirmed']}
     parsed['features'].map{|x| recovery_count += x['properties']['Recovered']}
   end 
-  push_message("#{prefix} COVID19 #{region == '' ?  "USA" : region} - Deaths: #{death_count}  Cases: #{case_count}  Recoveries: #{recovery_count}")
+  death_count = death_count.to_s.reverse.scan(/.{1,3}/).join(',').reverse
+  case_count = case_count.to_s.reverse.scan(/.{1,3}/).join(',').reverse
+  recovery_count = recovery_count.to_s.reverse.scan(/.{1,3}/).join(',').reverse
+  push_message("#{prefix} COVID19 #{region == '' ?  "World" : region.capitalize} - Dth: #{death_count}, Case: #{case_count}, Rcvr: #{recovery_count} (#{Time.now.to_s.split(" ")[0..1].join(' ')[0..15]})")
 end
 
 
@@ -143,13 +153,16 @@ def recall_command(prefix, command, actor, with_count=false)
 
   author = nil
   base_command = /^(.*?) /.match(command)[1]
+  if command =~ / posed /
+    query['is_pose'] = true
+  end
   if command =~ /recall when /
     # Need to get by user.
-    author, regex = /recall when (.*?) said (.*?)$/.match(command)[1,2]
+    author, regex = /recall when (.*?) (?:said|posed) (.*?)$/.match(command)[1,2]
     author.strip!
     regex.strip!
   elsif command =~ /count when/
-    author, regex = /count when (.*?) said (.*?)$/.match(command)[1,2]
+    author, regex = /count when (.*?) (?:said|posed) (.*?)$/.match(command)[1,2]
     author.strip!
     regex.strip!
   elsif command =~ /^count /
@@ -446,7 +459,11 @@ begin
               forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
             end
             actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
-            @collection.insert_one({author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by})
+            data = {author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by, is_pose: false}
+            if body =~ /saypose/
+              data[:is_pose] = true
+            end
+            @collection.insert_one(data)
             if real_body =~ /https?:/
               url = real_body.match(/(http.*?)[ "]/)[0].to_s
               url.gsub!(/"$/, '')
