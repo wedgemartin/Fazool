@@ -33,8 +33,10 @@ COMMANDS = {
   'should <text>'      => "Should I play the lottery?",
   'recall <text>'      => "recall lol",
   'recall when <author> said <text>'  => "recall when Joey said hello",
+  'recall when [everybody|everyone] said <text>'        => "counts how many times each author has said <text>",
   '<text>ometer'       => "Faz, what does the funnyometer say?",
   'stats'              =>  "Reports simple stats",
+  'authors'            =>  "Reports author list with IDs",
   'fortune'            => "Returns a BSD fortune",
   'store'              => "Store phrase to be recalled",
   'robinhood'          => "Check status of Robinhood",
@@ -64,10 +66,12 @@ def robinhood_command(prefix)
   end
 end
 
-def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets/1cb306b5331945548745a5ccd290188e_1.geojson', limit=10)
+# def covid_command(prefix, region, location='https://opendata.arcgis.com/datasets/1cb306b5331945548745a5ccd290188e_1.geojson', limit=10)
+def covid_command(prefix, region, location='https://prod-hub-indexer.s3.amazonaws.com/files/1cb306b5331945548745a5ccd290188e/1/full/4326/1cb306b5331945548745a5ccd290188e_1_full_4326.geojson', limit=10)
   if region and region =~ /^usa$/i
     region.upcase!
-    location = 'https://opendata.arcgis.com/datasets/628578697fb24d8ea4c32fa0c5ae1843_0.geojson'
+    # location = 'https://opendata.arcgis.com/datasets/628578697fb24d8ea4c32fa0c5ae1843_0.geojson'
+    location = 'https://prod-hub-indexer.s3.amazonaws.com/files/628578697fb24d8ea4c32fa0c5ae1843/0/full/4326/628578697fb24d8ea4c32fa0c5ae1843_0_full_4326.geojson'
   end
   url = URI.parse(location)
   req = Net::HTTP::Get.new(url.path, {'User-Agent' => 'Mozilla/5.0'})
@@ -156,7 +160,30 @@ def recall_command(prefix, command, actor, with_count=false)
   if command =~ / posed /
     query['is_pose'] = true
   end
-  if command =~ /recall when /
+  if command =~ /recall when every/
+    # Get list of unique authors.
+    author_ids = @collection.distinct('author_id').to_a
+    phrase = /recall when every.* said (.*)$/.match(command)[1]
+    result_array = []
+    author_ids.each do |x|
+      author_count = @collection.count(author_id: x, quote: /#{phrase}/)
+      if author_count > 0
+        author = @collection.find(author_id: x).limit(1).first
+        result_array.push([ "#{author['author']} said #{phrase} #{author_count} times", author_count ])
+        # push_message("#{prefix} #{author['author']} said #{phrase} #{author_count} times")
+      end
+    end
+    if result_array.count > 0
+  puts " RESULT ARRAY: #{result_array}"
+      result_array.sort{|a,b| b[1] <=> a[1]}.each do |x|
+puts " X: #{x}"
+        push_message("#{prefix} #{x[0]}")
+      end
+    else
+      push_message("#{prefix} Ain't nobody said that.")
+    end
+    return
+  elsif command =~ /recall when /
     # Need to get by user.
     author, regex = /recall when (.*?) (?:said|posed) (.*?)$/.match(command)[1,2]
     author.strip!
@@ -322,6 +349,16 @@ def stats_command(prefix)
   push_message("#{prefix} There are currently #{count} entries in my database from #{author_count} different authors.")
 end
 
+def authors_command(prefix)
+  count = @collection.count()
+  authors = @collection.distinct('author_id').to_a
+  author_array = []
+  authors.each do |x|
+    author = @collection.find(author_id: x).limit(1).first
+    author_array.push("#{author['author']}(##{x})")
+  end
+  push_message("#{prefix} #{author_array.join(", ")}")
+end
 
 def fortune_command(prefix)
   fortune = `fortune`
@@ -406,6 +443,8 @@ def command_logic(command, page_bool, actor)
     meter_command(prefix)
   when 'stats'
     stats_command(prefix)
+  when 'authors'
+    authors_command(prefix)
   when 'fortune'
     fortune_command(prefix)
   when 'store'
