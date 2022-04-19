@@ -107,7 +107,8 @@ end
 def news_command(prefix)
   key = ENV['FAZ_SHORTENER_KEY']
   shortener_login = ENV['FAZ_SHORTENER_LOGIN']
-  body = Net::HTTP.get('feeds.skynews.com', '/feeds/rss/world.xml')
+  news_uri = URI('https://feeds.skynews.com/feeds/rss/world.xml')
+  body = Net::HTTP.get(news_uri)
   parsed = Crack::XML.parse(body)
   items = parsed["rss"]["channel"]["item"]
   items.each do |item|

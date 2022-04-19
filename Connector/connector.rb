@@ -3,15 +3,28 @@
 require 'bunny'
 
 ### Now the ingestion stuff.
-@client = Socket.new Socket::AF_INET, Socket::SOCK_STREAM
+if ENV['FAZ_MUD_USE_SSL']
+  require 'openssl'
+  require 'socket'
+  sock = TCPSocket.new(ENV['FAZ_MUD_HOST'], ENV['FAZ_MUD_PORT'])
+  ctx = OpenSSL::SSL::SSLContext.new
+  ctx.set_params(verify_mode: OpenSSL::SSL::VERIFY_NONE)
+  @socket = OpenSSL::SSL::SSLSocket.new(sock, ctx).tap do |socket|
+    socket.sync_close = true
+    socket.connect
+  end
+  @client = @socket
+else
+  @client = Socket.new Socket::AF_INET, Socket::SOCK_STREAM
 
-puts "Connecting to #{ENV['FAZ_MUD_HOST']} on port #{ENV['FAZ_MUD_PORT']}"
-@client.connect Socket.pack_sockaddr_in(ENV['FAZ_MUD_PORT'], ENV['FAZ_MUD_HOST'])
-puts "Connected!"
+  puts "Connecting to #{ENV['FAZ_MUD_HOST']} on port #{ENV['FAZ_MUD_PORT']}"
+  @client.connect Socket.pack_sockaddr_in(ENV['FAZ_MUD_PORT'], ENV['FAZ_MUD_HOST'])
+  puts "Connected!"
 
-unless ENV['FAZ_PASS']
-  puts "ERROR: Must have a variable set for FAZ_PASS in the local env"
-  exit 1
+  unless ENV['FAZ_PASS']
+    puts "ERROR: Must have a variable set for FAZ_PASS in the local env"
+    exit 1
+  end
 end
 
 @client.puts "connect Fazool #{ENV['FAZ_PASS']}"
@@ -50,6 +63,3 @@ end
 
 sendbunny.close
 @client.close
-
-
-
