@@ -8,6 +8,18 @@ require 'mongo'
 require 'json'
 require 'net/http'
 require 'crack/xml'
+require 'ruby/openai'
+
+require 'httparty'
+HTTParty::Basement.default_options.update(verify: false)
+
+# HTTParty.get("#{@settings.api_ssl_server}#{url1}")
+# HTTParty.get("#{@settings.api_ssl_server}#{url2}")
+# HTTParty.get("#{@settings.api_ssl_server}#{url3}")
+
+
+
+@openai_key = ENV['FAZ_OPENAI_KEY']
 
 ### Start thread to read messages off the bus and act accordingly.
 COMMANDS = {
@@ -18,6 +30,7 @@ COMMANDS = {
   'what time is it'    => "Self explanatory",
   'how <adjective> are we?' => 'Current US covid summaries',
   'how <text>'         => "How questions: How is the sky blue?",
+  'tell me <text>'     => "Tell me why it rains?",
   'why <text>'         => "Why questions",
   'when <text>'        => "When questions i.e. when will i get married?",
   'will <text>'        => "Will Jerry go to the dance?",
@@ -274,19 +287,79 @@ def will_command(prefix)
   push_message("#{prefix} #{phrase_array.sample}")
 end
 
+def tellme_command(prefix, command=nil)
+  puts " OPENAI KEY: #{@openai_key}"
+  tellme = command.gsub('tell me ', '')
+  client = OpenAI::Client.new(access_token: @openai_key)
+  puts "CLIENT: #{client.inspect}"
+  # client.models.retrieve(id: 'text-davinci-001')
+  puts "CLIENT model retrieve completed..."
+  puts " COMMAND: #{tellme}"
+    data = client.completions(parameters: {
+        prompt: tellme,
+        temperature: 0,
+        max_tokens: 1800,
+        model: "text-ada-001",
+    })
+  # data = client.completions(
+    # parameters: {
+      # model: 'text-davinci-003',
+      # prompt: tellme,
+      # max_tokens: 5
+    # }
+  # )
+  puts " RAW DATA: #{data.inspect}"
+  puts " RAW RESPONSE: #{data['choices']}"
+  response = data['choices'].first['text'].strip
+  response
+  puts " RESPONSE IS: #{response}"
+
+  # phrase_array = [
+    # 'By osmosis.',
+    # 'By removing his head from his.. hey, whoah, I just saw a trail.',
+    # 'North by northweset.',
+    # "By visiting your grandma's place.",
+    # "Elementary, Watson.", 'How should I know?',
+    # 'I have no idea.',
+    # 'Just follow the instructions.',
+    # 'Let me google that for you.',
+    # 'Let me Bing that for ya...'
+  # ]
+  # response = phrase_array.sample
+  push_message("#{prefix} #{response}")
+end
+
+
 def how_command(prefix, command=nil)
-  phrase_array = [
-    'By osmosis.',
-    'By removing his head from his.. hey, whoah, I just saw a trail.',
-    'North by northweset.',
-    "By visiting your grandma's place.",
-    "Elementary, Watson.", 'How should I know?',
-    'I have no idea.',
-    'Just follow the instructions.',
-    'Let me google that for you.',
-    'Let me Bing that for ya...'
-  ]
-  push_message("#{prefix} #{phrase_array.sample}")
+  puts " OPENAI KEY: #{@openai_key}"
+  client = OpenAI::Client.new(access_token: @openai_key)
+  puts "CLIENT: #{client.inspect}"
+  # client.models.retrieve(id: 'text-davinci-001')
+  puts "CLIENT model retrieve completed..."
+  data = client.completions(
+    parameters: {
+      model: 'text-davinci-001',
+      prompt: command,
+      max_tokens: 5
+    }
+  )
+  response = data['choices'].first['text'].strip
+  response
+  puts " RESPONSE IS: #{response}"
+  
+  # phrase_array = [
+    # 'By osmosis.',
+    # 'By removing his head from his.. hey, whoah, I just saw a trail.',
+    # 'North by northweset.',
+    # "By visiting your grandma's place.",
+    # "Elementary, Watson.", 'How should I know?',
+    # 'I have no idea.',
+    # 'Just follow the instructions.',
+    # 'Let me google that for you.',
+    # 'Let me Bing that for ya...'
+  # ]
+  # response = phrase_array.sample
+  push_message("#{prefix} #{response}")
 end
 
 def when_command(prefix, actor)
@@ -412,6 +485,8 @@ def command_logic(command, page_bool, actor)
     who_command(prefix)
   when /^[wW]hat/
     what_command(prefix, command, actor)
+  when /^[tT]ell/
+    tellme_command(prefix, command)
   when /^[hH]ow/
     how_command(prefix, command)
   when /^[wW]hy/

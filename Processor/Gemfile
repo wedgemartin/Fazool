@@ -4,3 +4,6 @@ source 'http://rubygems.org'
 gem 'bunny'
 gem 'mongo'
 gem 'crack'
+gem 'httparty'
+
+gem 'ruby-openai'
