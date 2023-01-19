@@ -9,6 +9,7 @@ require 'json'
 require 'net/http'
 require 'crack/xml'
 require 'ruby/openai'
+require 'base64'
 
 require 'httparty'
 HTTParty::Basement.default_options.update(verify: false)
@@ -20,6 +21,8 @@ HTTParty::Basement.default_options.update(verify: false)
 
 
 @openai_key = ENV['FAZ_OPENAI_KEY']
+@shortener_url = 'https://ugov.co/u/urls'
+@shortener_login = ENV['FAZ_SHORTENER_LOGIN']
 
 ### Start thread to read messages off the bus and act accordingly.
 COMMANDS = {
@@ -118,19 +121,22 @@ end
 
 
 def news_command(prefix)
-  key = ENV['FAZ_SHORTENER_KEY']
-  shortener_login = ENV['FAZ_SHORTENER_LOGIN']
+  # key = ENV['FAZ_SHORTENER_KEY']
   news_uri = URI('https://feeds.skynews.com/feeds/rss/world.xml')
   body = Net::HTTP.get(news_uri)
+puts " BODY: #{body}"
   parsed = Crack::XML.parse(body)
+puts " PARSED: #{parsed}"
   items = parsed["rss"]["channel"]["item"]
+puts " ITEMS: #{items}"
   items.each do |item|
     title = item["title"].strip
     title = title.sub(/<a.+?>/, '').sub('</a>', '')
     link = item["link"].strip
-    shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{link}&version=2.0.1' 2>/dev/null`
+    shortened = `curl -X POST -d 'url=#{link}' '#{@shortener_url}' 2>/dev/null`
     resp = JSON.parse(shortened)
-    push_message("#{prefix} #{resp['data']['url']} - #{title}")
+    puts " SHORTENED: #{shortened}"
+    push_message("#{prefix} #{resp['url']} - #{title}")
   end
 end
 
@@ -241,66 +247,16 @@ def recall_command(prefix, command, actor, with_count=false)
   end
 end
 
-
-def who_command(prefix)
-  culprit_id = @collection.distinct('author_id').sample
-  culprit = @collection.find({author_id: culprit_id}).first['author']
-  phrase_array = [
-    'It was probably',
-    "I'm guessing",
-    "Wouldn't bet on it, but I've got 5 dollars on",
-    ' ',
-    'Your mother told me it was',
-    "Don't you think it might've been",
-    "Smells like",
-    "Could be"
-  ]
-  push_message("#{prefix} #{phrase_array.sample} #{culprit}")
-end
-
-
-def will_command(prefix)
-  phrase_array = [
-    'Sources say, "No"',
-    'Yes, definitely.',
-    'Probably not.',
-    'Yes.',
-    'No.',
-    'Affirmative.',
-    "I don't know, but unicorns ROCK!",
-    'Surely.',
-    'Negative, ghost rider.',
-    'Not on your life',
-    'If a frog had wings, would it bump its ass a hoppin?',
-    "In the words of 60 of Bill Cosby's friends, 'No.'",
-    "I wouldn't bet on it.",
-    'Most assuredly.',
-    'Maybe after tea.',
-    'How should I know?',
-    'Ask Baga. I think he bought it.',
-    'Probably.',
-    "If the good lord willin' and the creek don't rise",
-    "If the good lord willin' and the creek don't dry up",
-    "Yeah right after someone admits to receding.",
-    'Right after Blood gives up drugs.'
-  ]
-  push_message("#{prefix} #{phrase_array.sample}")
-end
-
-def tellme_command(prefix, command=nil)
-  puts " OPENAI KEY: #{@openai_key}"
-  tellme = command.gsub('tell me ', '')
+def ai_command(prefix, command=nil)
+  # tellme = command.gsub('tell me ', '')
   client = OpenAI::Client.new(access_token: @openai_key)
-  puts "CLIENT: #{client.inspect}"
   # client.models.retrieve(id: 'text-davinci-001')
-  puts "CLIENT model retrieve completed..."
-  puts " COMMAND: #{tellme}"
-    data = client.completions(parameters: {
-        prompt: tellme,
-        temperature: 0,
-        max_tokens: 1800,
-        model: "text-ada-001",
-    })
+  data = client.completions(parameters: {
+    prompt: command,
+    temperature: 0,
+    max_tokens: 1800,
+    model: "text-ada-001",
+  })
   # data = client.completions(
     # parameters: {
       # model: 'text-davinci-003',
@@ -309,11 +265,10 @@ def tellme_command(prefix, command=nil)
     # }
   # )
   puts " RAW DATA: #{data.inspect}"
-  puts " RAW RESPONSE: #{data['choices']}"
   response = data['choices'].first['text'].strip
+  response.gsub!(/[\r\n]+/, ' ')
   response
   puts " RESPONSE IS: #{response}"
-
   # phrase_array = [
     # 'By osmosis.',
     # 'By removing his head from his.. hey, whoah, I just saw a trail.',
@@ -328,80 +283,6 @@ def tellme_command(prefix, command=nil)
   # response = phrase_array.sample
   push_message("#{prefix} #{response}")
 end
-
-
-def how_command(prefix, command=nil)
-  puts " OPENAI KEY: #{@openai_key}"
-  client = OpenAI::Client.new(access_token: @openai_key)
-  puts "CLIENT: #{client.inspect}"
-  # client.models.retrieve(id: 'text-davinci-001')
-  puts "CLIENT model retrieve completed..."
-  data = client.completions(
-    parameters: {
-      model: 'text-davinci-001',
-      prompt: command,
-      max_tokens: 5
-    }
-  )
-  response = data['choices'].first['text'].strip
-  response
-  puts " RESPONSE IS: #{response}"
-  
-  # phrase_array = [
-    # 'By osmosis.',
-    # 'By removing his head from his.. hey, whoah, I just saw a trail.',
-    # 'North by northweset.',
-    # "By visiting your grandma's place.",
-    # "Elementary, Watson.", 'How should I know?',
-    # 'I have no idea.',
-    # 'Just follow the instructions.',
-    # 'Let me google that for you.',
-    # 'Let me Bing that for ya...'
-  # ]
-  # response = phrase_array.sample
-  push_message("#{prefix} #{response}")
-end
-
-def when_command(prefix, actor)
-  count = @collection.find(:quote => /"[wW]hen /).count
-  random = @collection.find(:quote => /"[wW]hen /).limit(-1).skip(rand(count)).first
-  if random
-    push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
-  else
-    push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
-  end
-end
-
-def what_command(prefix, command, actor)
-  if command =~ /time is/
-    push_message("#{prefix} It is currently #{Time.now}, #{actor}")
-  elsif command =~ /the fuck/i
-    push_message("#{prefix} I bet you expect me to say 'Indeed.' but I'm not your stupid Slack bot.")
-  else
-    count = @collection.find(:quote => /"[iI]t /).count()
-    random = @collection.find(:quote => /"[iI]t /).limit(-1).skip(rand(count)).first
-    # thing = random_quote['quote'].split(' ').sample.gsub('"', '')
-    # phrase_array = [ 'My best guess is', 'How about..', 'Your sister would say', "I'm thinking" ]
-    # push_message("#{prefix} #{phrase_array.sample} '#{thing}', #{actor}")
-    if random
-      push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
-    else
-      push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
-    end
-  end
-end
-
-
-def why_command(prefix, actor)
-  count = @collection.find(:quote => /"[bB]ecause/).count
-  random = @collection.find(:quote => /"[bB]ecause/).limit(-1).skip(rand(count)).first
-  if random
-    push_message("#{prefix} #{/"(.*?)"/.match(random['quote'])[1]}")
-  else
-    push_message("#{prefix} I'm sorry. I have no answer for that, #{actor}")
-  end
-end
-
 
 def stats_command(prefix)
   count = @collection.count()
@@ -428,20 +309,17 @@ def fortune_command(prefix)
   push_message("#{prefix} #{fortune}")
 end
 
-
 def store_command(prefix, string, actor)
   string.gsub!(/^store /, '')
   @collection.insert_one({author: actor, quote: "#{actor} stored: #{string}", :created_at => Time.now})
   push_message("#{prefix} Stored.")
 end
 
-
 def meter_command(prefix)
   dec = rand()
   num = rand(100)
   push_message("#{prefix} #{num + dec}")
 end
-
 
 def command_logic(command, page_bool, actor)
   puts "  ACTOR HERE IS: #{actor}"
@@ -480,27 +358,6 @@ def command_logic(command, page_bool, actor)
     recall_command(prefix, command, actor)
   when /^[cC]ount/
     recall_command(prefix, command, actor, true)
-  when /^[wW]ho/
-    # Who based command. Make shit up.
-    who_command(prefix)
-  when /^[wW]hat/
-    what_command(prefix, command, actor)
-  when /^[tT]ell/
-    tellme_command(prefix, command)
-  when /^[hH]ow/
-    how_command(prefix, command)
-  when /^[wW]hy/
-    why_command(prefix, actor)
-  when /^[wW]hen/
-    when_command(prefix, actor)
-  when /^[aA]re/
-    will_command(prefix)
-  when /^[iI]s/
-    will_command(prefix)
-  when /^[wW]ill/
-    will_command(prefix)
-  when /^[sS]hould/
-    will_command(prefix)
   when /ometer/
     meter_command(prefix)
   when 'stats'
@@ -512,7 +369,7 @@ def command_logic(command, page_bool, actor)
   when 'store'
     store_command(prefix, command, actor)
   else
-    push_message("#{prefix} Sorry, #{actor} but I do not understand that command.")
+    ai_command(prefix, command)
   end
 end
 
@@ -583,11 +440,10 @@ def main_loop
               if real_body =~ /https?:/
                 url = real_body.match(/(http.*?)[ "]/)[0].to_s
                 url.gsub!(/"$/, '')
-                key = ENV['FAZ_SHORTENER_KEY']
-                shortener_login = ENV['FAZ_SHORTENER_LOGIN']
-                shortened = `curl 'http://api.bitly.com/v3/shorten\?login=#{shortener_login}&apiKey=#{key}&longUrl=#{url}&version=2.0.1' 2>/dev/null`
-                resp = JSON.parse(shortened)
-                push_message("say #{resp['data']['url']}")
+                payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
+                shortened = HTTParty.post(@shortener_url, body: payload)
+                # resp = JSON.parse(shortened)
+                push_message("say #{shortened['url']}")
               end
             end
           end
