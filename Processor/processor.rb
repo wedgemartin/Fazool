@@ -251,11 +251,16 @@ def ai_command(prefix, command=nil)
   # tellme = command.gsub('tell me ', '')
   client = OpenAI::Client.new(access_token: @openai_key)
   # client.models.retrieve(id: 'text-davinci-001')
+  model = 'text-ada-001'
+  if command =~ /^davinci/
+    command = command.gsub('davinci', '')
+    model = 'text-davinci-001'
+  end
   data = client.completions(parameters: {
     prompt: command,
     temperature: 0,
     max_tokens: 1800,
-    model: "text-ada-001",
+    model: model,
   })
   # data = client.completions(
     # parameters: {
@@ -414,14 +419,14 @@ def main_loop
         else
           request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
         end
-        actor = /^\[(.*?)\(/.match(body)[1]
+        actor = /^\[?(.*?)\(?/.match(body)[1]
         if request
           command_logic(request, is_page, actor)
           end
       else
         # Record this to the database.
         if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
-          if body =~ /^\[[a-zA-Z0-9]/
+          if body =~ /^\[?[a-zA-Z0-9]/
             real_body = body.match(/^\[.*?\](.*)/).captures[0]
             actor = body.split(' ').shift
             if actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/)

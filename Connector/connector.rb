@@ -57,8 +57,9 @@ while 1 == 1
   begin
     while line = @client.gets
     puts " GOT LINE: #{line}"
-      if line =~ /^\[[a-zA-Z0-9]/ and line.split(' ').count > 1
+      if line =~ /^\[?[a-zA-Z0-9]/ and line.split(' ').count > 1
         if line =~ /page/ or line =~ /saypose/ or line =~ /, "/
+          puts "Sending '#{line}' to #{sendqueue.name}"
           send_channel.default_exchange.publish(line, :routing_key => sendqueue.name)
         end
       end

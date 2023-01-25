@@ -26,7 +26,7 @@ fi
 
 CONNECTOR_PATH=`dirname $0`
 
-( cd ${CONNECTOR_PATH} && nohup ${CONNECTOR_PATH}/connector.rb > /tmp/connector.out 2>&1 & )
+( cd ${CONNECTOR_PATH} && nohup ${CONNECTOR_PATH}/connector.rb > /tmp/connector.$$.${FAZ_QUEUE_NAME}.out 2>&1 & )
 
 if [ $? -eq 0 ]; then
   echo "Started successfully." 

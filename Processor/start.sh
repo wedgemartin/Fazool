@@ -11,7 +11,7 @@ fi
 
 PROCESSOR_PATH=`dirname $0`
 
-( cd ${PROCESSOR_PATH} && nohup ${PROCESSOR_PATH}/processor.rb > /tmp/processor.out 2>&1 & )
+( cd ${PROCESSOR_PATH} && nohup ${PROCESSOR_PATH}/processor.rb > /tmp/processor.$$.${FAZ_QUEUE_NAME}.out 2>&1 & )
 
 if [ $? -eq 0 ]; then
   echo "Started successfully." 
