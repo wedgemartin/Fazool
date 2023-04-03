@@ -247,14 +247,18 @@ def recall_command(prefix, command, actor, with_count=false)
   end
 end
 
+def get_random_model
+  return [ 'text-davinci-003', 'text-curie-001', 'text-babbage-001' ].sample
+end
+
 def ai_command(prefix, command=nil)
   # tellme = command.gsub('tell me ', '')
   client = OpenAI::Client.new(access_token: @openai_key)
   # client.models.retrieve(id: 'text-davinci-001')
-  model = 'text-ada-001'
+  model = get_random_model() 
+  # model = 'text-ada-001'
   if command =~ /^davinci/
     command = command.gsub('davinci', '')
-    model = 'text-davinci-001'
   end
   data = client.completions(parameters: {
     prompt: command,
@@ -286,7 +290,7 @@ def ai_command(prefix, command=nil)
     # 'Let me Bing that for ya...'
   # ]
   # response = phrase_array.sample
-  push_message("#{prefix} #{response}")
+  push_message("#{prefix} <#{model}> #{response}")
 end
 
 def stats_command(prefix)
@@ -386,10 +390,11 @@ def main_loop
     queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
     # @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
+    dbname = ENV['FAZ_DBNAME'] || 'fazool'
     @mongo = Mongo::Client.new([ '127.0.0.1:27017' ],
                                user: 'fazool',
                                password: ENV['FAZ_PASS'],
-                               database: 'fazool' )
+                               database: dbname )
 
     @collection = @mongo[:quotes]
     @covid_collection = @mongo[:covid]
@@ -413,24 +418,28 @@ def main_loop
           if is_page
           if page_type == "MUCK"
             request = /"(.*?)"/.match(body)[1]
-            else
+          else
             request = /pages: (.*?)$/.match(body)[1]
           end
         else
           request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
         end
-        actor = /^\[?(.*?)\(?/.match(body)[1]
+        if /^\[?(.*?)\(/.match(body)
+          actor = /^\[?(.*?)\(/.match(body)[1]
+        else
+          actor = body.split(/\s+/)[0]
+        end
         if request
           command_logic(request, is_page, actor)
           end
       else
         # Record this to the database.
-        if body !~ /^##/ and body !~ /^You / and body !~ /^Fazool /
-          if body =~ /^\[?[a-zA-Z0-9]/
+        if body !~ /^##/ and body !~ /^You / and body !~ /^[fF]azool / and body !~ /\[fazool\(/
+          if body =~ /^\[[a-zA-Z0-9]/
             real_body = body.match(/^\[.*?\](.*)/).captures[0]
             actor = body.split(' ').shift
-            if actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/)
-              author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\d+)\)/).captures[0]
+            if actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/)
+              author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/).captures[0]
               if actor =~ /<-/ # this is a force.
                 # look up author_id
                 forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
@@ -442,13 +451,18 @@ def main_loop
                 data[:is_pose] = true
               end
               @collection.insert_one(data)
-              if real_body =~ /https?:/
+              if real_body =~ /https?:/ and real_body !~ /ugov/
                 url = real_body.match(/(http.*?)[ "]/)[0].to_s
                 url.gsub!(/"$/, '')
                 payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
                 shortened = HTTParty.post(@shortener_url, body: payload)
                 # resp = JSON.parse(shortened)
                 push_message("say #{shortened['url']}")
+              else
+                # Randomly offer opinion.
+                if rand(100) < 7
+                  ai_command("say ", real_body)
+                end
               end
             end
           end

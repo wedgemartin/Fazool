@@ -27,7 +27,8 @@ def do_connect
       exit 1
     end
   end
-  @client.puts "connect Fazool #{ENV['FAZ_PASS']}"
+  faz_username = ENV['FAZ_USERNAME'] || 'Fazool'
+  @client.puts "connect #{faz_username} #{ENV['FAZ_PASS']}"
 end
 
 ### Start thread to read messages off the bus and act accordingly.
@@ -47,6 +48,7 @@ Thread.new do
   end
 end
 
+
 sendbunny = Bunny.new
 sendbunny.start
 send_channel = sendbunny.create_channel
@@ -54,14 +56,25 @@ sendqueue = send_channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
 
 while 1 == 1
   do_connect
+  if ENV['FAZ_KEEPALIVE']
+    Thread.new do 
+      while 1 == 1
+        sleep ENV['FAZ_KEEPALIVE']
+        @client.puts '@@'
+      end
+    end
+  end
   begin
+    @client.puts "say HELLO"
     while line = @client.gets
-    puts " GOT LINE: #{line}"
-      if line =~ /^\[?[a-zA-Z0-9]/ and line.split(' ').count > 1
+      puts " GOT LINE: #{line}"
+      if line =~ /^\[[a-zA-Z0-9]/ and line.split(' ').count > 1
         if line =~ /page/ or line =~ /saypose/ or line =~ /, "/
           puts "Sending '#{line}' to #{sendqueue.name}"
           send_channel.default_exchange.publish(line, :routing_key => sendqueue.name)
         end
+      else
+        puts " Dunno what to do with line: #{line}"
       end
     end
   rescue => e
