@@ -290,6 +290,9 @@ def ai_command(prefix, command=nil)
     # 'Let me Bing that for ya...'
   # ]
   # response = phrase_array.sample
+  if response =~ /, "/ and !response.include?('The Baron') # Don't ask.
+    response = response.match(/, "(.*?)"/)[1]
+  end
   push_message("#{prefix} <#{model}> #{response}")
 end
 
