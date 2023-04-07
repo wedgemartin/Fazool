@@ -251,7 +251,7 @@ def get_random_model
   return [ 'text-davinci-003', 'text-curie-001', 'text-babbage-001' ].sample
 end
 
-def ai_command(prefix, command=nil)
+def ai_command(prefix, command=nil, actor=nil)
   # tellme = command.gsub('tell me ', '')
   client = OpenAI::Client.new(access_token: @openai_key)
   # client.models.retrieve(id: 'text-davinci-001')
@@ -290,10 +290,12 @@ def ai_command(prefix, command=nil)
     # 'Let me Bing that for ya...'
   # ]
   # response = phrase_array.sample
-  if response =~ /, "/ and !response.include?('The Baron') # Don't ask.
-    response = response.match(/, "(.*?)"/)[1]
+  if response =~ /".*"/ and !response.include?('The Baron') # Don't ask.
+    response = response.match(/"(.*?)"/)[1]
+  elsif actor and response =~ /^#{actor} is /
+    response = response.gsub(/^#{actor} is /, ':is ')
   end
-  push_message("#{prefix} <#{model}> #{response}")
+  push_message("#{prefix} #{response}")
 end
 
 def stats_command(prefix)
@@ -335,7 +337,7 @@ end
 
 def command_logic(command, page_bool, actor)
   puts "  ACTOR HERE IS: #{actor}"
-  prefix = page_bool ? "page #{actor} = : >>" : ":>>"
+  prefix = page_bool ? "page #{actor} = : >>" : "sa "
   base_command = ''
   if command =~ /^[sS]tats/
     base_command = 'stats'
@@ -361,6 +363,7 @@ def command_logic(command, page_bool, actor)
   when 'weather'
     weather_command(prefix, command.split(' ')[1])
   when 'news'
+    prefix = ':>>'
     news_command(prefix)
   when 'robinhood'
     robinhood_command(prefix)
@@ -381,7 +384,7 @@ def command_logic(command, page_bool, actor)
   when 'store'
     store_command(prefix, command, actor)
   else
-    ai_command(prefix, command)
+    ai_command(prefix, command, actor)
   end
 end
 
