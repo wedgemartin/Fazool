@@ -18,8 +18,6 @@ HTTParty::Basement.default_options.update(verify: false)
 # HTTParty.get("#{@settings.api_ssl_server}#{url2}")
 # HTTParty.get("#{@settings.api_ssl_server}#{url3}")
 
-
-
 @openai_key = ENV['FAZ_OPENAI_KEY']
 @shortener_url = 'https://ugov.co/u/urls'
 @shortener_login = ENV['FAZ_SHORTENER_LOGIN']
@@ -306,7 +304,7 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
   puts " RAW DATA: #{data.inspect}"
   response = data['choices'].sample['text'].strip
   response.gsub!(/[\r\n]+/, ' ')
-  response.gsub!(/^Fazool: /, '')
+  response.gsub!(/^#{@faz_username}: /, '')
   response
   puts " RESPONSE IS: #{response}"
   # phrase_array = [
@@ -473,7 +471,7 @@ def main_loop
           end
       else
         # Record this to the database.
-        if body !~ /^##/ and body !~ /^You / and body !~ /^[fF]azool / and body !~ /\[#{ENV['FAZ_USERNAME']}\(/
+        if body !~ /^##/ and body !~ /^You / and body !~ /^Marvin / and body !~ /\[#{@faz_username}\(/
           if body =~ /^\[[a-zA-Z0-9]/
             real_body = body.match(/^\[.*?\](.*)/).captures[0]
             actor = body.split(' ').shift
