@@ -23,6 +23,8 @@ HTTParty::Basement.default_options.update(verify: false)
 @openai_key = ENV['FAZ_OPENAI_KEY']
 @shortener_url = 'https://ugov.co/u/urls'
 @shortener_login = ENV['FAZ_SHORTENER_LOGIN']
+@faz_username = ENV['FAZ_USERNAME'] || 'Fazool'
+@name_prefix = @faz_username[0..2]
 
 ### Start thread to read messages off the bus and act accordingly.
 COMMANDS = {
@@ -248,20 +250,48 @@ def recall_command(prefix, command, actor, with_count=false)
 end
 
 def get_random_model
-  return [ 'text-davinci-003', 'text-curie-001', 'text-babbage-001' ].sample
+  # return [ 'text-davinci-003', 'text-curie-001', 'text-babbage-001' ].sample
+  return [ 'text-davinci-003' ].sample
 end
 
-def ai_command(prefix, command=nil, actor=nil)
+def ai_command(prefix, command=nil, actor=nil, passive=false)
   # tellme = command.gsub('tell me ', '')
   client = OpenAI::Client.new(access_token: @openai_key)
   # client.models.retrieve(id: 'text-davinci-001')
-  model = get_random_model() 
+  model = get_random_model()
   # model = 'text-ada-001'
   if command =~ /^davinci/
     command = command.gsub('davinci', '')
   end
+  # Get context...
+  if passive
+  puts ">>> PASSIVE"
+    context = @collection.find({}, sort: {created_at: -1}).limit(4).to_a.reverse
+    complete_prompt = "INPUT Your name is #{@faz_username}, also known as '#{@name_prefix}'. #{ENV['FAZ_CUSTOM_PROMPTS']} You are responding to the following conversation: "
+    puts " COMPLETE PROMPT: #{complete_prompt}"
+    context.unshift({quote: complete_prompot})
+    puts ">>>>>>>>>>>>>>>  PASSIVE passive command is: #{command}"
+    puts " CONTEXT COUNT: #{context.count}"
+    ret_array = []
+    context_data = context.map {|x|
+      puts " -------------------------------------------- X IS: #{x}"
+      x_arr = x[:quote].split(/\s+/)
+      x_arr.shift
+      ret_array.push(x_arr.join(' '))
+    }
+    context_data = ret_array + [command]
+    puts ">>> TMP CONTEXT DATA..==================== "
+    puts ">>> #{context_data}"
+    puts ">>> END TMP CONTEXT DATA..==================== "
+    context_data = context_data.join('. ')
+  else
+    complete_prompt = "INPUT Your name is #{@faz_username}, also known as '#{@name_prefix}'. #{ENV['FAZ_CUSTOM_PROMPTS']} You are responding to the following: #{command}"
+    # context_data = command
+    context_data = complete_prompt
+  end
+  puts "CONTEXT DATA: #{context_data}"
   data = client.completions(parameters: {
-    prompt: command,
+    prompt: context_data,
     temperature: 0,
     max_tokens: 1800,
     model: model,
@@ -274,8 +304,9 @@ def ai_command(prefix, command=nil, actor=nil)
     # }
   # )
   puts " RAW DATA: #{data.inspect}"
-  response = data['choices'].first['text'].strip
+  response = data['choices'].sample['text'].strip
   response.gsub!(/[\r\n]+/, ' ')
+  response.gsub!(/^Fazool: /, '')
   response
   puts " RESPONSE IS: #{response}"
   # phrase_array = [
@@ -295,7 +326,9 @@ def ai_command(prefix, command=nil, actor=nil)
   elsif actor and response =~ /^#{actor} is /
     response = response.gsub(/^#{actor} is /, ':is ')
   end
-  push_message("#{prefix} #{response}")
+  if response and response != ""
+    push_message("#{prefix} #{response}")
+  end
 end
 
 def stats_command(prefix)
@@ -411,7 +444,7 @@ def main_loop
       puts " Got body from bus: #{body}"
       # Body will either be a request for data recall
       #   or stuff that needs to be filtered/recorded in the DB
-      if body =~ /"Faz(...)?,/ or body =~ / to you\./ or body =~ / pages: /
+      if body =~ /"#{@name_prefix}(...)?,/ or body =~ / to you\./ or body =~ / pages: /
         # We have a command.
         page_type = "MUCK"
         if body =~ / to you\./
@@ -428,7 +461,7 @@ def main_loop
             request = /pages: (.*?)$/.match(body)[1]
           end
         else
-          request = /"Faz(?:...)?, (.*?)"/.match(body)[1]
+          request = /"#{@name_prefix}(?:...)?, (.*?)"/.match(body)[1]
         end
         if /^\[?(.*?)\(/.match(body)
           actor = /^\[?(.*?)\(/.match(body)[1]
@@ -440,7 +473,7 @@ def main_loop
           end
       else
         # Record this to the database.
-        if body !~ /^##/ and body !~ /^You / and body !~ /^[fF]azool / and body !~ /\[fazool\(/
+        if body !~ /^##/ and body !~ /^You / and body !~ /^[fF]azool / and body !~ /\[#{ENV['FAZ_USERNAME']}\(/
           if body =~ /^\[[a-zA-Z0-9]/
             real_body = body.match(/^\[.*?\](.*)/).captures[0]
             actor = body.split(' ').shift
@@ -467,7 +500,7 @@ def main_loop
               else
                 # Randomly offer opinion.
                 if rand(100) < 7
-                  ai_command("say ", real_body)
+                  ai_command("say ", real_body, nil, true)
                 end
               end
             end
