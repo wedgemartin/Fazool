@@ -267,7 +267,7 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
     context = @collection.find({}, sort: {created_at: -1}).limit(4).to_a.reverse
     complete_prompt = "INPUT Your name is #{@faz_username}, also known as '#{@name_prefix}'. #{ENV['FAZ_CUSTOM_PROMPTS']} You are responding to the following conversation: "
     puts " COMPLETE PROMPT: #{complete_prompt}"
-    context.unshift({quote: complete_prompot})
+    context.unshift({quote: complete_prompt})
     puts ">>>>>>>>>>>>>>>  PASSIVE passive command is: #{command}"
     puts " CONTEXT COUNT: #{context.count}"
     ret_array = []
@@ -283,7 +283,8 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
     puts ">>> END TMP CONTEXT DATA..==================== "
     context_data = context_data.join('. ')
   else
-    complete_prompt = "INPUT Your name is #{@faz_username}, also known as '#{@name_prefix}'. #{ENV['FAZ_CUSTOM_PROMPTS']} You are responding to the following: #{command}"
+    complete_prompt = "Your name is #{@faz_username}, also known as '#{@name_prefix}'. #{ENV['FAZ_CUSTOM_PROMPTS']} You are responding to the following: #{command}"
+    puts ">>>>>>>>>>>>>>>>>>>>>>>  COMPLETE PROMPT: #{complete_prompt}"
     # context_data = command
     context_data = complete_prompt
   end
@@ -471,7 +472,7 @@ def main_loop
           end
       else
         # Record this to the database.
-        if body !~ /^##/ and body !~ /^You / and body !~ /^Marvin / and body !~ /\[#{@faz_username}\(/
+        if body !~ /^##/ and body !~ /^You / and body !~ /^#{@faz_username} / and body !~ /\[#{@faz_username}\(/
           if body =~ /^\[[a-zA-Z0-9]/
             real_body = body.match(/^\[.*?\](.*)/).captures[0]
             actor = body.split(' ').shift
@@ -497,7 +498,9 @@ def main_loop
                 push_message("say #{shortened['url']}")
               else
                 # Randomly offer opinion.
-                if rand(100) < 7
+                puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: #{real_body}"
+                if rand(100) < 10
+                  puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: HIT"
                   ai_command("say ", real_body, nil, true)
                 end
               end
