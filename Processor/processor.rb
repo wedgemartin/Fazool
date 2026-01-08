@@ -87,8 +87,6 @@ COMMANDS = {
   'market'             => "Check status of stock market"
 }
 
-@channel = Stomp::Client.new(@stomp_hash)
-
 def push_message(text)
   @channel.publish("/queue/#{@routing_key}", text)
 end
@@ -467,10 +465,10 @@ def main_loop
     @covid_collection = @mongo[:covid]
 
     puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}_received'..."
-    client = Stomp::Client.new(@stomp_hash)
+    @channel = Stomp::Client.new(@stomp_hash)
     puts "Connected to STOMP broker"
 
-    client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |msg|
+    @channel.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |msg|
       begin
         body = msg.body
         puts "Received message: #{body}"
@@ -547,7 +545,7 @@ def main_loop
         puts e.backtrace
       end
     end
-    client.join
+    @channel.join
   rescue => e
     puts "ERROR..."
     puts "Handling error: #{e}"
