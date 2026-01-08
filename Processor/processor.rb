@@ -470,9 +470,10 @@ def main_loop
     client = Stomp::Client.new(@stomp_hash)
     puts "Connected to STOMP broker"
 
-    client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |body|
+    client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |msg|
       begin
-        puts "Received message: #{body.inspect}"
+        body = msg.body
+        puts "Received message: #{body}"
 
       # Body will either be a request for data recall
       #   or stuff that needs to be filtered/recorded in the DB
