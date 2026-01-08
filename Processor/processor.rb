@@ -30,7 +30,7 @@ HTTParty::Basement.default_options.update(verify: false)
     {
       login: 'guest',
       passcode: 'guest',
-      vhost: 'dev.ugov.co',
+      # vhost: 'dev.ugov.co',
       host:  '127.0.0.1',
       port:  61613
     }
@@ -459,115 +459,114 @@ def command_logic(command, page_bool, actor)
 end
 
 def main_loop
-    begin
-      # bunny = Bunny.new
-      # bunny.start
-      # @channel = bunny.create_channel
-      # queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
-      # stomp = Stomp::Client.new(@stomp_hash)
-      # puts " main 1: #{stomp.inspect}"
-  
-      # @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
-      dbname = ENV['FAZ_DBNAME'] || 'fazool'
-      @mongo = Mongo::Client.new([ '127.0.0.1:27017' ],
-                                 user: 'fazool',
-                                 password: ENV['FAZ_PASS'],
-                                 database: dbname )
-      puts " main 2"
-  
-      @collection = @mongo[:quotes]
-      @covid_collection = @mongo[:covid]
-      puts " main 3"
-  
-      puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}_received'..."
-      connection = Stomp::Connection.new(@stomp_hash)
-      client = Stomp::Client.new(@stomp_hash)
-      Thread.new do
-        client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |x|
-          puts " DClient got body.. #{x}"
+  begin
+    # bunny = Bunny.new
+    # bunny.start
+    # @channel = bunny.create_channel
+    # queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
+    # stomp = Stomp::Client.new(@stomp_hash)
+    # puts " main 1: #{stomp.inspect}"
+
+    # @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
+    dbname = ENV['FAZ_DBNAME'] || 'fazool'
+    @mongo = Mongo::Client.new([ "#{ENV['FAZ_DB_HOST'] || '127.0.0.1'}:27017" ],
+                               user: 'fazool',
+                               password: ENV['FAZ_PASS'],
+                               database: dbname )
+    puts " main 2"
+
+    @collection = @mongo[:quotes]
+    @covid_collection = @mongo[:covid]
+    puts " main 3"
+
+    puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}_received'..."
+    # connection = Stomp::Connection.new(@stomp_hash)
+    client = Stomp::Client.new(@stomp_hash)
+    # Thread.new do
+      # client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |x|
+        # puts " DClient got body.. #{x}"
+      # end
+      # client.join
+      # push_message("say buh")
+    # end     
+    puts "Connection is: #{client.inspect}"
+    client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |body|
+      puts " Got body from bus: #{body}"
+      # Body will either be a request for data recall
+      #   or stuff that needs to be filtered/recorded in the DB
+      if body =~ /"#{@name_prefix}(...)?,/ or body =~ / to you\./ or body =~ / pages: /
+        # We have a command.
+        page_type = "MUCK"
+        if body =~ / to you\./
+          is_page = true
+        elsif body =~ / pages: /
+          is_page = true
+          page_type = "MUSH"
         end
-        push_message("say buh")
-      end     
-      Thread.new do
-        puts "Connection is: #{connection.inspect}"
-        connection.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |body|
-          puts " Got body from bus: #{body}"
-          # Body will either be a request for data recall
-          #   or stuff that needs to be filtered/recorded in the DB
-          if body =~ /"#{@name_prefix}(...)?,/ or body =~ / to you\./ or body =~ / pages: /
-            # We have a command.
-            page_type = "MUCK"
-            if body =~ / to you\./
-              is_page = true
-            elsif body =~ / pages: /
-              is_page = true
-              page_type = "MUSH"
-            end
-            request = nil
-              if is_page
-              if page_type == "MUCK"
-                request = /"(.*?)"/.match(body)[1]
-              else
-                request = /pages: (.*?)$/.match(body)[1]
-              end
-            else
-              request = /"#{@name_prefix}(?:...)?, (.*?)"/.match(body)[1]
-            end
-            if /^\[?(.*?)\(/.match(body)
-              actor = /^\[?(.*?)\(/.match(body)[1]
-            else
-              actor = body.split(/\s+/)[0]
-            end
-            if request
-              command_logic(request, is_page, actor)
-              end
+        request = nil
+        if is_page
+          if page_type == "MUCK"
+            request = /"(.*?)"/.match(body)[1]
           else
-            # Record this to the database.
-            if body !~ /^##/ and body !~ /^You / and body !~ /^#{@faz_username} / and body !~ /\[#{@faz_username}\(/
-              if body =~ /^\[[a-zA-Z0-9]/
-                real_body = body.match(/^\[.*?\](.*)/).captures[0]
-                actor = body.split(' ').shift
-                if actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/)
-                  author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/).captures[0]
-                  if actor =~ /<-/ # this is a force.
-                    # look up author_id
-                    forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
-                    forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
-                  end
-                  actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
-                  data = {author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by, is_pose: false}
-                  if body =~ /saypose/
-                    data[:is_pose] = true
-                  end
-                  @collection.insert_one(data)
-                  if real_body =~ /https?:/ and real_body !~ /ugov/
-                    url = real_body.match(/(http.*?)[ "]/)[0].to_s
-                    url.gsub!(/"$/, '')
-                    payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
-                    shortened = HTTParty.post(@shortener_url, body: payload)
-                    # resp = JSON.parse(shortened)
-                    push_message("say #{shortened['url']}")
-                  else
-                    # Randomly offer opinion.
-                    puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: #{real_body}"
-                    if rand(100) < 0
-                      puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: HIT"
-                      ai_command("say ", real_body, nil, true)
-                    end
-                  end
+            request = /pages: (.*?)$/.match(body)[1]
+          end
+        else
+          request = /"#{@name_prefix}(?:...)?, (.*?)"/.match(body)[1]
+        end
+        if /^\[?(.*?)\(/.match(body)
+          actor = /^\[?(.*?)\(/.match(body)[1]
+        else
+          actor = body.split(/\s+/)[0]
+        end
+        if request
+          command_logic(request, is_page, actor)
+        end
+      else
+        # Record this to the database.
+        if body !~ /^##/ and body !~ /^You / and body !~ /^#{@faz_username} / and body !~ /\[#{@faz_username}\(/
+          if body =~ /^\[[a-zA-Z0-9]/
+            real_body = body.match(/^\[.*?\](.*)/).captures[0]
+            actor = body.split(' ').shift
+            if actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/)
+              author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/).captures[0]
+              if actor =~ /<-/ # this is a force.
+                # look up author_id
+                forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
+                forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
+              end
+              actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
+              data = {author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by, is_pose: false}
+              if body =~ /saypose/
+                data[:is_pose] = true
+              end
+              @collection.insert_one(data)
+              if real_body =~ /https?:/ and real_body !~ /ugov/
+                url = real_body.match(/(http.*?)[ "]/)[0].to_s
+                url.gsub!(/"$/, '')
+                payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
+                shortened = HTTParty.post(@shortener_url, body: payload)
+                # resp = JSON.parse(shortened)
+                push_message("say #{shortened['url']}")
+              else
+                # Randomly offer opinion.
+                puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: #{real_body}"
+                if rand(100) < 0
+                  puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: HIT"
+                  ai_command("say ", real_body, nil, true)
                 end
               end
+            end
           end
         end
       end
-      sleep 999999999
-    rescue => e
-      puts "ERROR..."
-      puts "Handling error: #{e}"
-      puts "Reentering main loop..."
-      sleep 1
-      main_loop
     end
+    client.join
+  rescue => e
+    puts "ERROR..."
+    puts "Handling error: #{e}"
+    puts "Reentering main loop..."
+    sleep 1
+    main_loop
   end
 end
 
@@ -578,3 +577,5 @@ Thread.new do
 end
 
 sleep 9999999999999
+
+main_loop
