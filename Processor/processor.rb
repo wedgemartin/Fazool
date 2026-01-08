@@ -339,7 +339,6 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
   response = data['choices'].first['message']['content'].strip
   response.gsub!(/[\r\n]+/, ' ')
   response.gsub!(/^#{@faz_username}: /, '')
-  response
   puts " RESPONSE IS: #{response}"
   # phrase_array = [
     # 'By osmosis.',
