@@ -72,7 +72,8 @@ Thread.new do
   begin
     stomp = Stomp::Client.new(stomp_hash)
     puts "Connected to STOMP broker for outbound messages"
-    stomp.subscribe("/queue/send_to_#{ENV['FAZ_QUEUE_NAME']}") do |body|
+    stomp.subscribe("/queue/send_to_#{ENV['FAZ_QUEUE_NAME']}") do |msg|
+      body = msg.body
       puts "Sending to MUD: #{body}"
       @client.puts body
     end
