@@ -1,7 +1,8 @@
 
 source 'http://rubygems.org'
 
-gem 'bunny'
+gem 'stomp'
+gem 'daemons'
 gem 'mongo'
 gem 'crack'
 gem 'httparty'

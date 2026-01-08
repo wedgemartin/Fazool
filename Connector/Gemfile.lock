@@ -1,15 +1,13 @@
 GEM
   remote: https://rubygems.org/
   specs:
-    amq-protocol (2.2.0)
-    bunny (2.7.2)
-      amq-protocol (>= 2.2.0)
+    stomp (1.4.10)
 
 PLATFORMS
   ruby
 
 DEPENDENCIES
-  bunny
+  stomp
 
 BUNDLED WITH
-   1.16.0
+   1.17.3

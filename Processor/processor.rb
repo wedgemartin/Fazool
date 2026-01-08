@@ -3,7 +3,7 @@
 Encoding.default_external = Encoding::UTF_8
 Encoding.default_internal = Encoding::UTF_8
 
-require 'bunny'
+require 'stomp'
 require 'mongo'
 require 'json'
 require 'net/http'
@@ -23,6 +23,46 @@ HTTParty::Basement.default_options.update(verify: false)
 @shortener_login = ENV['FAZ_SHORTENER_LOGIN']
 @faz_username = ENV['FAZ_USERNAME'] || 'Fazool'
 @name_prefix = @faz_username[0..2]
+@routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
+
+@stomp_hash = {
+  hosts: [
+    {
+      login: 'guest',
+      passcode: 'guest',
+      vhost: 'dev.ugov.co',
+      host:  '127.0.0.1',
+      port:  61613
+    }
+  ],
+  reliable: true,                  # reliable (use failover)
+  initial_reconnect_delay: 0.01,   # initial delay before reconnect (secs)
+  max_reconnect_delay: 30.0,       # max delay before reconnect
+  use_exponential_back_off: true,  # increase delay between reconnect attpempts
+  back_off_multiplier: 2,          # next delay multiplier
+  max_reconnect_attempts: 0,       # retry forever, use # for maximum attempts
+  randomize: false,                # do not radomize hosts hash before reconnect
+  connect_timeout: 0,              # Timeout for TCP/TLS connects, use # for max seconds
+  connect_headers: {},             # user supplied CONNECT headers (req'd for Stomp 1.1+)
+  parse_timeout: 5,                # IO::select wait time on socket reads
+  logger: nil,                     # user suplied callback logger instance
+  dmh: false,                      # do not support multihomed IPV4 / IPV6 hosts during failover
+  closed_check: true,              # check first if closed in each protocol method
+  hbser: false,                    # raise on heartbeat send exception
+  stompconn: true,                # Use STOMP instead of CONNECT
+  usecrlf: false,                  # Use CRLF command and header line ends (1.2+)
+  max_hbread_fails: 0,             # Max HB read fails before retry.  0 => never retry
+  max_hbrlck_fails: 0,             # Max HB read lock obtain fails before retry.  0 => never retry
+  fast_hbs_adjust: 0.0,            # Fast heartbeat senders sleep adjustment, seconds, needed ...
+  # For fast heartbeat senders.  'fast' == YMMV.  If not
+  # correct for your environment, expect unnecessary fail overs
+  connread_timeout: 0,             # Timeout during CONNECT for read of CONNECTED/ERROR, secs
+  tcp_nodelay: true,               # Turns on the TCP_NODELAY socket option; disables Nagle's algorithm
+  start_timeout: 0,                # Timeout around Stomp::Client initialization
+  sslctx_newparm: nil,             # Param for SSLContext.new
+  ssl_post_conn_check: true,       # Further verify broker identity
+  nto_cmd_read: 99999999999999,              # No timeout on COMMAND read
+}
 
 ### Start thread to read messages off the bus and act accordingly.
 COMMANDS = {
@@ -50,9 +90,10 @@ COMMANDS = {
   'market'             => "Check status of stock market"
 }
 
+@channel = Stomp::Client.new(@stomp_hash)
 
 def push_message(text)
-  @channel.default_exchange.publish(text, :routing_key => @routing_key)
+  @channel.publish("/queue/#{@routing_key}", text)
 end
 
 
@@ -249,7 +290,7 @@ end
 
 def get_random_model
   # return [ 'text-davinci-003', 'text-curie-001', 'text-babbage-001' ].sample
-  return [ 'text-davinci-003' ].sample
+  return [ 'gpt-4' ].sample
 end
 
 def ai_command(prefix, command=nil, actor=nil, passive=false)
@@ -258,9 +299,6 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
   # client.models.retrieve(id: 'text-davinci-001')
   model = get_random_model()
   # model = 'text-ada-001'
-  if command =~ /^davinci/
-    command = command.gsub('davinci', '')
-  end
   # Get context...
   if passive
   puts ">>> PASSIVE"
@@ -289,10 +327,10 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
     context_data = complete_prompt
   end
   puts "CONTEXT DATA: #{context_data}"
-  data = client.completions(parameters: {
-    prompt: context_data,
-    temperature: 0,
-    max_tokens: 1800,
+  data = client.chat(parameters: {
+    messages: [{role: 'user', content: context_data}],
+    temperature: 0.5,
+    max_tokens: 8000,
     model: model,
   })
   # data = client.completions(
@@ -303,7 +341,7 @@ def ai_command(prefix, command=nil, actor=nil, passive=false)
     # }
   # )
   puts " RAW DATA: #{data.inspect}"
-  response = data['choices'].sample['text'].strip
+  response = data['choices'].first['message']['content'].strip
   response.gsub!(/[\r\n]+/, ' ')
   response.gsub!(/^#{@faz_username}: /, '')
   response
@@ -421,100 +459,122 @@ def command_logic(command, page_bool, actor)
 end
 
 def main_loop
-  begin
-    bunny = Bunny.new
-    bunny.start
-    @channel = bunny.create_channel
-    queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
-
-    # @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
-    dbname = ENV['FAZ_DBNAME'] || 'fazool'
-    @mongo = Mongo::Client.new([ '127.0.0.1:27017' ],
-                               user: 'fazool',
-                               password: ENV['FAZ_PASS'],
-                               database: dbname )
-
-    @collection = @mongo[:quotes]
-    @covid_collection = @mongo[:covid]
-    @routing_key = "send_to_#{ENV['FAZ_QUEUE_NAME']}"
-
-    puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}-received'..."
-    queue.subscribe(:block => true) do |delivery_info, properties, body|
-      puts " Got body from bus: #{body}"
-      # Body will either be a request for data recall
-      #   or stuff that needs to be filtered/recorded in the DB
-      if body =~ /"#{@name_prefix}(...)?,/ or body =~ / to you\./ or body =~ / pages: /
-        # We have a command.
-        page_type = "MUCK"
-        if body =~ / to you\./
-          is_page = true
-        elsif body =~ / pages: /
-          is_page = true
-          page_type = "MUSH"
+    begin
+      # bunny = Bunny.new
+      # bunny.start
+      # @channel = bunny.create_channel
+      # queue = @channel.queue("#{ENV['FAZ_QUEUE_NAME']}_received")
+      # stomp = Stomp::Client.new(@stomp_hash)
+      # puts " main 1: #{stomp.inspect}"
+  
+      # @mongo = Mongo::Client.new('mongodb://127.0.0.1:27017/fazool')
+      dbname = ENV['FAZ_DBNAME'] || 'fazool'
+      @mongo = Mongo::Client.new([ '127.0.0.1:27017' ],
+                                 user: 'fazool',
+                                 password: ENV['FAZ_PASS'],
+                                 database: dbname )
+      puts " main 2"
+  
+      @collection = @mongo[:quotes]
+      @covid_collection = @mongo[:covid]
+      puts " main 3"
+  
+      puts "Subscribing to queue '#{ENV['FAZ_QUEUE_NAME']}_received'..."
+      connection = Stomp::Connection.new(@stomp_hash)
+      client = Stomp::Client.new(@stomp_hash)
+      Thread.new do
+        client.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |x|
+          puts " DClient got body.. #{x}"
         end
-        request = nil
-          if is_page
-          if page_type == "MUCK"
-            request = /"(.*?)"/.match(body)[1]
-          else
-            request = /pages: (.*?)$/.match(body)[1]
-          end
-        else
-          request = /"#{@name_prefix}(?:...)?, (.*?)"/.match(body)[1]
-        end
-        if /^\[?(.*?)\(/.match(body)
-          actor = /^\[?(.*?)\(/.match(body)[1]
-        else
-          actor = body.split(/\s+/)[0]
-        end
-        if request
-          command_logic(request, is_page, actor)
-          end
-      else
-        # Record this to the database.
-        if body !~ /^##/ and body !~ /^You / and body !~ /^#{@faz_username} / and body !~ /\[#{@faz_username}\(/
-          if body =~ /^\[[a-zA-Z0-9]/
-            real_body = body.match(/^\[.*?\](.*)/).captures[0]
-            actor = body.split(' ').shift
-            if actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/)
-              author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/).captures[0]
-              if actor =~ /<-/ # this is a force.
-                # look up author_id
-                forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
-                forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
-              end
-              actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
-              data = {author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by, is_pose: false}
-              if body =~ /saypose/
-                data[:is_pose] = true
-              end
-              @collection.insert_one(data)
-              if real_body =~ /https?:/ and real_body !~ /ugov/
-                url = real_body.match(/(http.*?)[ "]/)[0].to_s
-                url.gsub!(/"$/, '')
-                payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
-                shortened = HTTParty.post(@shortener_url, body: payload)
-                # resp = JSON.parse(shortened)
-                push_message("say #{shortened['url']}")
+        push_message("say buh")
+      end     
+      Thread.new do
+        puts "Connection is: #{connection.inspect}"
+        connection.subscribe("/queue/#{ENV['FAZ_QUEUE_NAME']}_received") do |body|
+          puts " Got body from bus: #{body}"
+          # Body will either be a request for data recall
+          #   or stuff that needs to be filtered/recorded in the DB
+          if body =~ /"#{@name_prefix}(...)?,/ or body =~ / to you\./ or body =~ / pages: /
+            # We have a command.
+            page_type = "MUCK"
+            if body =~ / to you\./
+              is_page = true
+            elsif body =~ / pages: /
+              is_page = true
+              page_type = "MUSH"
+            end
+            request = nil
+              if is_page
+              if page_type == "MUCK"
+                request = /"(.*?)"/.match(body)[1]
               else
-                # Randomly offer opinion.
-                puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: #{real_body}"
-                if rand(100) < 10
-                  puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: HIT"
-                  ai_command("say ", real_body, nil, true)
+                request = /pages: (.*?)$/.match(body)[1]
+              end
+            else
+              request = /"#{@name_prefix}(?:...)?, (.*?)"/.match(body)[1]
+            end
+            if /^\[?(.*?)\(/.match(body)
+              actor = /^\[?(.*?)\(/.match(body)[1]
+            else
+              actor = body.split(/\s+/)[0]
+            end
+            if request
+              command_logic(request, is_page, actor)
+              end
+          else
+            # Record this to the database.
+            if body !~ /^##/ and body !~ /^You / and body !~ /^#{@faz_username} / and body !~ /\[#{@faz_username}\(/
+              if body =~ /^\[[a-zA-Z0-9]/
+                real_body = body.match(/^\[.*?\](.*)/).captures[0]
+                actor = body.split(' ').shift
+                if actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/)
+                  author_id = actor.match(/^\[[a-zA-Z0-9]+\(#(\w+)\)/).captures[0]
+                  if actor =~ /<-/ # this is a force.
+                    # look up author_id
+                    forced_by_id = actor.match(/<-\(#(\d+)\)/).captures[0]
+                    forced_by = @collection.find(author_id: forced_by_id, quote: {"$ne": nil}).first['author']
+                  end
+                  actor = actor.match(/^\[([a-zA-Z0-9]+)\(/).captures[0]
+                  data = {author_id: author_id, author: actor, quote: real_body, created_at: Time.now, forced_by: forced_by, is_pose: false}
+                  if body =~ /saypose/
+                    data[:is_pose] = true
+                  end
+                  @collection.insert_one(data)
+                  if real_body =~ /https?:/ and real_body !~ /ugov/
+                    url = real_body.match(/(http.*?)[ "]/)[0].to_s
+                    url.gsub!(/"$/, '')
+                    payload = "url=#{Base64.encode64(url).gsub(/\n/, '')}"
+                    shortened = HTTParty.post(@shortener_url, body: payload)
+                    # resp = JSON.parse(shortened)
+                    push_message("say #{shortened['url']}")
+                  else
+                    # Randomly offer opinion.
+                    puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: #{real_body}"
+                    if rand(100) < 0
+                      puts ">>>>>>>>>>>>>>>>  RANDOM PASSIVE CHECK: HIT"
+                      ai_command("say ", real_body, nil, true)
+                    end
+                  end
                 end
               end
-            end
           end
         end
       end
+      sleep 999999999
+    rescue => e
+      puts "ERROR..."
+      puts "Handling error: #{e}"
+      puts "Reentering main loop..."
+      sleep 1
+      main_loop
     end
-  rescue => e
-    Rails.logger.info "Handling error: #{e}"
-    Rails.logger.info "Reentering main loop..."
-    sleep 1
-    main_loop
   end
 end
 
-main_loop
+puts " Running main loop..."
+
+Thread.new do
+  main_loop
+end
+
+sleep 9999999999999
