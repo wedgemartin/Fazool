@@ -88,7 +88,9 @@ COMMANDS = {
 }
 
 def push_message(text)
+  puts "PUSH_MESSAGE: Publishing '#{text}' to queue '/queue/#{@routing_key}'"
   @channel.publish("/queue/#{@routing_key}", text)
+  puts "PUSH_MESSAGE: Published successfully"
 end
 
 
