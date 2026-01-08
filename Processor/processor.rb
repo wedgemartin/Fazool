@@ -538,7 +538,6 @@ def main_loop
                 end
               end
             end
-          end
         end
       rescue => e
         puts "Error processing message: #{e}"
