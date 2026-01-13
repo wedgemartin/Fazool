@@ -19,7 +19,7 @@ GEM
       bson (>= 4.14.1, < 5.0.0)
     multi_xml (0.6.0)
     multipart-post (2.3.0)
-    rexml (3.2.5)
+    rexml (3.4.2)
     ruby-openai (4.2.0)
       faraday (>= 1)
       faraday-multipart (>= 1)
@@ -28,6 +28,7 @@ GEM
 
 PLATFORMS
   aarch64-linux
+  x86_64-linux
 
 DEPENDENCIES
   crack
